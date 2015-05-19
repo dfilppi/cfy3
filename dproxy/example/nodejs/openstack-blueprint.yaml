@@ -1,0 +1,192 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on an openstack cloud environment.
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_0
+
+imports:
+  - http://www.getcloudify.org/spec/cloudify/3.1/types.yaml
+  - http://www.getcloudify.org/spec/openstack-plugin/1.1/plugin.yaml
+  - http://www.getcloudify.org/spec/diamond-plugin/1.1/plugin.yaml
+  - plugins/proxy/plugin.yaml
+  - types/nodecellar.yaml
+
+
+#####################################################################################
+# inputs section allows the user to use same
+# blueprint for creating different deployments, each one
+# with its own parameters.
+# to specify deployment inputs run:
+#   - cfy deployments create -b <blueprint_id> -d <deployment_id> -i inputs.json
+#####################################################################################
+
+inputs:
+
+  image:
+    description: >
+      Image to be used when launching agent VM's
+
+  flavor:
+    description: >
+      Flavor of the agent VM's
+
+  agent_user:
+    description: >
+      User for connecting to agent VM's
+
+node_types:
+
+  ###########################################################
+  # We define a type that inherits openstack's default
+  # server, and adds monitoring capabillities on top of it.
+  ###########################################################
+
+  nodecellar.nodes.MonitoredServer:
+    derived_from: cloudify.openstack.nodes.Server
+    properties:
+      cloudify_agent:
+        default:
+          user: { get_input: agent_user }
+      server:
+        default:
+          image: { get_input: image }
+          flavor: { get_input: flavor }
+    interfaces:
+
+      ###########################################################
+      # We are infact telling cloudify to install a diamond
+      # monitoring agent on the server.
+      #
+      # (see https://github.com/BrightcoveOS/Diamond)
+      ###########################################################
+
+      cloudify.interfaces.monitoring_agent:
+          install:
+            implementation: diamond.diamond_agent.tasks.install
+            inputs:
+              diamond_config:
+                default:
+                  interval: 1
+          start: diamond.diamond_agent.tasks.start
+          stop: diamond.diamond_agent.tasks.stop
+          uninstall: diamond.diamond_agent.tasks.uninstall
+
+      ###########################################################
+      # Adding some collectors. These collectors are necessary
+      # for the Cloudify UI to display the deafult metrics.
+      ###########################################################
+
+      cloudify.interfaces.monitoring:
+          start:
+            implementation: diamond.diamond_agent.tasks.add_collectors
+            inputs:
+              collectors_config:
+                default:
+                  CPUCollector: {}
+                  MemoryCollector: {}
+                  LoadAverageCollector: {}
+                  DiskUsageCollector:
+                    config:
+                      devices: x?vd[a-z]+[0-9]*$
+                  NetworkCollector: {}
+
+node_templates:
+
+  nodejs_host:
+    type: nodecellar.nodes.MonitoredServer
+    relationships:
+
+      ###########################################################
+      # Attaching a floating ip to the nodejs host
+      ###########################################################
+
+      - target: nodecellar_floatingip
+        type: cloudify.openstack.server_connected_to_floating_ip
+
+      ###########################################################
+      # Attaching the nodecellar security group to
+      # the nodecellar host
+      ###########################################################
+
+      - target: nodecellar_security_group
+        type: cloudify.openstack.server_connected_to_security_group
+
+  nodejs:
+    type: nodecellar.nodes.NodeJSServer
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: nodejs_host
+
+  nodecellar:
+    type: nodecellar.nodes.NodecellarApplicationModule
+    properties:
+      port: 8080
+    relationships:
+
+      ################################
+      # Setting the mongo connection
+      ################################
+
+      - type: node_connected_to_mongo
+        target: proxy
+
+      ################################
+      # Setting the nodejs connection
+      ################################
+
+      - type: node_contained_in_nodejs
+        target: nodejs
+      - type: cloudify.relationships.depends_on
+        target: proxy
+
+  ##
+  #  The blueprint proxy to mongo
+  ##
+  proxy:
+    type: cloudify.nodes.DeploymentProxy
+    properties:
+      deployment_id: md
+      wait_for: expr
+      test: outputs['server_info']['value']['port']>0
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: nodejs_host
+
+  ###########################################################
+  # A security group to enable access to the nodejs host
+  # using the port of the nodecellar application.
+  #
+  # This security group will be attached to the nodejs_host
+  ###########################################################
+
+  nodecellar_security_group:
+    type: cloudify.openstack.nodes.SecurityGroup
+    properties:
+      security_group:
+        name: nodecellar_security_group
+      rules:
+        - remote_ip_prefix: 0.0.0.0/0
+          port: { get_property: [ nodecellar, port ] }
+
+  ###########################################################
+  # A floating ip to be attached to the nodejs host, since
+  # eventually we want to be able to access it
+  # from any machine, on any network.
+  ###########################################################
+
+  nodecellar_floatingip:
+    type: cloudify.openstack.nodes.FloatingIP
+
+###########################################################
+# This outputs section exposes the application endpoint.
+# You can access it by running:
+#   - cfy deployments -d <deployment_id> outputs
+###########################################################
+
+outputs:
+  endpoint:
+    description: Web application endpoint
+    value:
+      ip_address: { get_attribute: [ nodecellar_floatingip, floating_ip_address ] }
+      port: { get_property: [ nodecellar, port ] }
