@@ -1,0 +1,32 @@
+plugins:
+  # Name could be anything, this name is what appears on the beginning of operation
+  # mappings.
+  dproxy:
+    executor: central_deployment_agent
+    source: proxy
+
+node_types:
+  cloudify.nodes.DeploymentProxy:
+    derived_from: cloudify.nodes.Root
+    properties:
+      deployment_id:
+        default: ''
+      # wait_for can be either 'exists' or 'expr'
+      wait_for:
+        default: ''
+      # if wait_for is exists, test is the outputs property to
+      # wait for existence.  if wait_for is expr, test is a
+      # python boolean expression, with the collection 'outputs'
+      # refering to deployment outputs, e.g. outputs['x'] >10
+      test:
+        default: ''
+      # timeout in seconds.  0 = wait forever
+      timeout:
+        default: 30
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: dproxy.plugin.tasks.wait
+      test:
+        run:
+          implementation: dproxy.plugin.tasks.wait
