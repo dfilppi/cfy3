@@ -101,17 +101,15 @@ node_templates:
       # Setting the mongo connection
       ################################
 
-#      - type: node_connected_to_mongo
-#        target: mongod
-#
+      - type: node_connected_to_mongo
+        target: mongod
+
       ################################
       # Setting the nodejs connection
       ################################
 
       - type: node_contained_in_nodejs
         target: nodejs
-      - type: cloudify.relationships.depends_on
-        target: proxy
 
   proxy:
     type: cloudify.nodes.DeploymentProxy

@@ -137,8 +137,6 @@ node_templates:
 
       - type: node_contained_in_nodejs
         target: nodejs
-      - type: cloudify.relationships.depends_on
-        target: proxy
 
   ##
   #  The blueprint proxy to mongo
