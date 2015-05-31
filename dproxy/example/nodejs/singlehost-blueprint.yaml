@@ -116,7 +116,7 @@ node_templates:
     properties:
       deployment_id: md
       wait_for: expr
-      test: outputs['endpoint']['value']['port']>0
+      test: outputs['endpoint']['port']>0
 
 ###########################################################
 # This outputs section exposes the application endpoint.

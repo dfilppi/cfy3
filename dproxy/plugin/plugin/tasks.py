@@ -43,13 +43,11 @@ def wait(**kwargs):
     if(ctx.node.properties['wait_for']=='exists'):
       while(time.time()<=endtime):
         try:
-          #ctx.logger.info("getting output {0} from deployment {1}".format(ctx.node.properties['test'],ctx.node.properties['deployment_id']))
-          #ctx.logger.info("    outputs={0}".format(str(manager.get_rest_client().deployments.get(ctx.node.properties['deployment_id']).outputs)))
 
-          val=manager.get_rest_client().deployments.get(ctx.node.properties['deployment_id']).outputs[ctx.node.properties['test']]
+          val=manager.get_rest_client().deployments.outputs.get(ctx.node.properties['deployment_id']).outputs[ctx.node.properties['test']]
 
           if(val!=None):
-            ctx.instance.runtime_properties['outputs'] = manager.get_rest_client().deployments.get(ctx.node.properties['deployment_id']).outputs
+            ctx.instance.runtime_properties['outputs'] = manager.get_rest_client().deployments.outputs.get(ctx.node.properties['deployment_id']).outputs
             return
         except:
           ctx.logger.info("caught exception {0}".format(sys.exc_info()[0]))
@@ -60,7 +58,8 @@ def wait(**kwargs):
     elif(ctx.node.properties['wait_for']=='expr'):
       while(time.time()<=endtime):
         try:
-          outputs=manager.get_rest_client().deployments.get(ctx.node.properties['deployment_id']).outputs
+          outputs=manager.get_rest_client().deployments.outputs.get(ctx.node.properties['deployment_id']).outputs
+
           ctx.logger.info("evaluating {0}".format(ctx.node.properties['test']))
           if(eval(ctx.node.properties['test'])==True):
             ctx.logger.info("evaluated as True")
@@ -71,8 +70,6 @@ def wait(**kwargs):
       
         except:
           ctx.logger.info("caught exception {0}".format(sys.exc_info()[0]))
-          pass
         time.sleep(5)
-
   
     raise RecoverableError("timed out waiting for deployment")
