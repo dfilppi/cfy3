@@ -1,0 +1,173 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on an existing host.
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_0
+
+imports:  
+  - http://www.getcloudify.org/spec/cloudify/3.2/types.yaml
+  - http://www.getcloudify.org/spec/diamond-plugin/1.2/plugin.yaml
+  - types/types.yaml
+  - plugins/proxy/plugin.yaml
+
+###########################################################
+# Inputs section allows the user to use same
+# blueprint several times, with different paramters for
+# each time.
+###########################################################
+
+inputs:
+
+  host_ip:
+      description: >
+        The ip of the host the application will be deployed on
+
+  agent_user:
+      description: >
+        User name used when SSH-ing into the started machine
+
+  agent_private_key_path:
+      description: >
+        Path to a private key that resided on the management machine.
+        SSH-ing into agent machines will be done with this key.
+
+node_templates:
+
+  ###########################################################
+  # We define a type that inherits cloudify's default
+  # compute node, and adds monitoring capabillities
+  # on top of it.
+  ###########################################################
+
+  host:
+    type: cloudify.nodes.Compute
+    properties:
+      ip: { get_input: host_ip }
+      cloudify_agent:
+        user: { get_input: agent_user }
+        key: { get_input: agent_private_key_path }
+#    interfaces:
+
+      ###########################################################
+      # We are infact telling cloudify to install a diamond
+      # monitoring agent on the server.
+      #
+      # (see https://github.com/BrightcoveOS/Diamond)
+      ###########################################################
+
+#      cloudify.interfaces.monitoring_agent:
+#          install:
+#            implementation: diamond.diamond_agent.tasks.install
+#            inputs:
+#              diamond_config:
+#                interval: 1
+#          start: diamond.diamond_agent.tasks.start
+#          stop: diamond.diamond_agent.tasks.stop
+#          uninstall: diamond.diamond_agent.tasks.uninstall
+
+      ###########################################################
+      # Adding some collectors. These collectors are necessary
+      # for the Cloudify UI to display the deafult metrics.
+      ###########################################################
+
+#      cloudify.interfaces.monitoring:
+#          start:
+#            implementation: diamond.diamond_agent.tasks.add_collectors
+#            inputs:
+#              collectors_config:
+#                CPUCollector: {}
+#                MemoryCollector: {}
+#                LoadAverageCollector: {}
+#                DiskUsageCollector:
+#                  config:
+#                    devices: x?vd[a-z]+[0-9]*$
+#                NetworkCollector: {}
+
+  nodejs:
+    type: nodecellar.nodes.NodeJSServer
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+
+  mongos:
+    type: nodecellar.nodes.Mongos
+    properties:
+      port: 30000
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+      - type: cloudify.relationships.connected_to
+        target: proxy
+        source_interfaces:
+          cloudify.interfaces.relationship_lifecycle:
+            postconfigure:
+              implementation: scripts/mongo/getdbhosts.py
+
+
+  nodecellar:
+    type: nodecellar.nodes.NodecellarApplicationModule
+    properties:
+      port: 8080
+    relationships:
+
+      ################################
+      # Setting the mongo connection
+      ################################
+      - type: node_connected_to_mongo
+        target: mongos
+
+      ################################
+      # Setting the nodejs connection
+      ################################
+
+      - type: node_contained_in_nodejs
+        target: nodejs
+
+  winedb:
+    type: cloudify.nodes.ApplicationModule
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure: scripts/mongo/install-pymongo.sh
+        start: scripts/nodecellar/loaddb.py
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+      - type: cloudify.relationships.depends_on
+        target: nodecellar
+      - type: cloudify.relationships.connected_to
+        target: mongos
+        target_interfaces:
+          cloudify.interfaces.relationship_lifecycle:
+            postconfigure:
+              implementation: scripts/nodecellar/getmongoinfo.py
+        properties:
+          connection_type: all_to_one
+      
+  ######################################################
+  # The proxy is waiting on the mongo blueprint which
+  # starts the mongod and mongo cfg nodes.
+  ######################################################
+  proxy:
+    type: cloudify.nodes.DeploymentProxy
+    properties:
+      deployment_id: md
+      wait_for: expr
+      test: len(outputs['cluster_info']['cfghosts'])>0
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+
+###########################################################
+# This outputs section exposes the application endpoint.
+# You can access it by running:
+#   - cfy deployments -d <deployment_id> outputs
+###########################################################
+
+outputs:
+  endpoint:
+    description: Web application endpoint
+    value:
+      ip_address: { get_property: [ host, ip ] }
+      port: { get_property: [nodecellar, port] }
+

@@ -1,0 +1,173 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on an existing host.
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_0
+
+imports:  
+  - http://www.getcloudify.org/spec/cloudify/3.2/types.yaml
+  - http://www.getcloudify.org/spec/diamond-plugin/1.2/plugin.yaml
+  - http://www.getcloudify.org/spec/openstack-plugin/1.2/plugin.yaml
+  - types/types.yaml
+  - plugins/proxy/plugin.yaml
+
+###########################################################
+# Inputs section allows the user to use same
+# blueprint several times, with different paramters for
+# each time.
+###########################################################
+
+inputs:
+
+  image:
+    description: >
+      Image to be used when launching agent VM's
+
+  flavor:
+    description: >
+      Flavor of the agent VM's
+
+  agent_user:
+    description: >
+      User for connecting to agent VM's
+
+node_types:
+
+  nodecellar.nodes.MonitoredServer:
+    derived_from: cloudify.openstack.nodes.Server
+    properties:
+      cloudify_agent:
+        default:
+          user: { get_input: agent_user }
+          wait_started_timeout: 60
+      server:
+        default:
+          image: { get_input: image }
+          flavor: { get_input: flavor }
+    interfaces:
+      cloudify.interfaces.monitoring_agent:
+          install:
+            implementation: diamond.diamond_agent.tasks.install
+            inputs:
+              diamond_config:
+                default:
+                  interval: 1
+          start: diamond.diamond_agent.tasks.start
+          stop: diamond.diamond_agent.tasks.stop
+          uninstall: diamond.diamond_agent.tasks.uninstall
+
+      cloudify.interfaces.monitoring:
+          start:
+            implementation: diamond.diamond_agent.tasks.add_collectors
+            inputs:
+              collectors_config:
+                default:
+                  CPUCollector: {}
+                  MemoryCollector: {}
+                  LoadAverageCollector: {}
+                  DiskUsageCollector:
+                    config:
+                      devices: x?vd[a-z]+[0-9]*$
+                  NetworkCollector: {}
+
+node_templates:
+
+  ###############################################
+  # This host deploys the database and sets the
+  # outputs
+  ###############################################
+  deployer_host:
+    type: cloudify.openstack.nodes.Server
+    properties:
+      cloudify_agent:
+        user: { get_input: agent_user }
+        wait_started_timeout: 60
+      server:
+        image: { get_input: image }
+        flavor: { get_input: flavor }
+
+  winedb:
+    type: cloudify.nodes.ApplicationModule
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure: scripts/mongo/install-pymongo.sh
+        start: scripts/nodecellar/loaddb.py
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: deployer_host
+      - type: cloudify.relationships.depends_on
+        target: nodecellar
+      - type: cloudify.relationships.connected_to
+        target: mongos
+        target_interfaces:
+          cloudify.interfaces.relationship_lifecycle:
+            postconfigure:
+              implementation: scripts/nodecellar/getmongoinfo.py
+        properties:
+          connection_type: all_to_one
+      
+  node_host:
+    type: nodecellar.nodes.MonitoredServer
+    instances:
+      deploy: 2
+    relationships:
+      - target: nodecellar_security_group
+        type: cloudify.openstack.server_connected_to_security_group
+      - type: cloudify.openstack.server_connected_to_floating_ip
+        target: node_floatingip
+
+  nodecellar_security_group:
+    type: cloudify.openstack.nodes.SecurityGroup
+    properties:
+      security_group:
+        name: nodecellar_security_group
+      rules:
+        - remote_ip_prefix: 0.0.0.0/0
+          port: { get_property: [ nodecellar, port ] }
+        - remote_ip_prefix: 0.0.0.0/0
+          port: { get_property: [ mongos, port ] }
+
+  nodejs:
+    type: nodecellar.nodes.NodeJSServer
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: node_host
+
+  node_floatingip:
+    type: cloudify.openstack.nodes.FloatingIP
+
+  mongos:
+    type: nodecellar.nodes.Mongos
+    properties:
+      port: 30000
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: node_host
+      - type: cloudify.relationships.connected_to
+        target: proxy
+        source_interfaces:
+          cloudify.interfaces.relationship_lifecycle:
+            postconfigure:
+              implementation: scripts/mongo/getdbhosts.py
+
+  nodecellar:
+    type: nodecellar.nodes.NodecellarApplicationModule
+    properties:
+      port: 8080
+    relationships:
+      - type: node_connected_to_mongo
+        target: mongos
+      - type: node_contained_in_nodejs
+        target: nodejs
+
+  proxy:
+    type: cloudify.nodes.DeploymentProxy
+    properties:
+      deployment_id: md
+      wait_for: expr
+      test: len(outputs['cluster_info']['cfghosts'])>0
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: node_host
+
