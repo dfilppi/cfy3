@@ -77,25 +77,24 @@ node_templates:
   # This host deploys the database and sets the
   # outputs
   ###############################################
-  deployer_host:
-    type: cloudify.openstack.nodes.Server
+  deployer:
+    type: cloudify.nodes.Compute
     properties:
-      cloudify_agent:
-        user: { get_input: agent_user }
-        wait_started_timeout: 60
-      server:
-        image: { get_input: image }
-        flavor: { get_input: flavor }
+      install_agent: false
 
   winedb:
     type: cloudify.nodes.ApplicationModule
     interfaces:
       cloudify.interfaces.lifecycle:
-        configure: scripts/mongo/install-pymongo.sh
-        start: scripts/nodecellar/loaddb.py
+        configure:
+          implementation: scripts/mongo/install-pymongo.sh
+          executor: central_deployment_agent
+        start:
+          implementation: scripts/nodecellar/loaddb.py
+          executor: central_deployment_agent
     relationships:
       - type: cloudify.relationships.contained_in
-        target: deployer_host
+        target: deployer
       - type: cloudify.relationships.depends_on
         target: nodecellar
       - type: cloudify.relationships.connected_to
@@ -104,6 +103,7 @@ node_templates:
           cloudify.interfaces.relationship_lifecycle:
             postconfigure:
               implementation: scripts/nodecellar/getmongoinfo.py
+              executor: central_deployment_agent
         properties:
           connection_type: all_to_one
       

@@ -139,31 +139,23 @@ node_templates:
       cloudify.interfaces.lifecycle:
         configure: scripts/mongo/install-pymongo.sh
 
-  joiner_host:
-    type: cloudify.openstack.nodes.Server
-    properties:
-      server:
-        image: { get_input: image }
-        flavor: { get_input: flavor }
-      cloudify_agent:
-        user: { get_input: agent_user }
-
-  # This node will wait for all others to start so it can
-  # publish outputs for other blueprints
   joiner:
-    type: cloudify.nodes.Root
+    type: cloudify.nodes.Compute
+    properties:
+      install_agent: false
     interfaces:
       cloudify.interfaces.lifecycle:
-        configure: scripts/mongo/install-pymongo.sh
-        start: scripts/mongo/set-joiner-outputs.py
+        configure:
+          implementation: scripts/mongo/install-pymongo.sh
+          executor: central_deployment_agent
+        start:
+          implementation: scripts/mongo/set-joiner-outputs.py
+          executor: central_deployment_agent
     relationships:
       - type: joiner_connected_to_mongocfg
         target: mongoc
       - type: joiner_connected_to_mongod
         target: mongod
-      - type: cloudify.relationships.contained_in
-        target: joiner_host
-
 
 
 outputs:

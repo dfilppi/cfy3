@@ -270,4 +270,4 @@ except pymongo.errors.OperationFailure as e:
 
 w=c.winedb.wines
 
-w.posts.insert(dbData())
+w.insert(dbData())
