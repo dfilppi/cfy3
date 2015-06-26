@@ -12,17 +12,13 @@ rtval="{}:{}:{}".format(ctx.target.instance.host_ip,ctx.target.instance.runtime_
 
 ctx.logger.info("setting key:{} = {}".format(rtkey,rtval))
 try:
-  for i in range(10):
-    ctx.source.instance.runtime_properties[rtkey]=rtval
-    ctx.source.instance.update()
-    if(rtkey in ctx.source.instance.runtime_properties):
-      break
-    ctx.logger.info(" props update ignored, retrying")
-    time.sleep(random.uniform(.1,1.0))
+  ctx.source.instance.runtime_properties[rtkey]=rtval
+  ctx.source.instance.update()
 except rest_exceptions.CloudifyClientError as e:
   if 'conflict' in str(e):
-    time.sleep(random.uniform(.1,1.0))  #random sleep to avoid sync race
-    raise RecoverableError('conflict updating runtime_properties')
+    ctx.operation.retry(
+      message='Backends updated concurrently, retrying.',
+      retry_after=random.randint(1,3))
   else:
     raise
  
