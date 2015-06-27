@@ -243,16 +243,6 @@ for k,v in ctx.instance.runtime_properties.iteritems():
     mport=int(v.split(':')[1])
     break
 
-#nips=''
-#for k,v in ctx.instance.runtime_properties.iteritems():
-#  if( k.startswith('node_host_')):
-#    ctx.logger.info("adding nodejs instance ip:{}".format(v))
-#    nips=nips+v+","
-#    break
-#if(len(nips>0)):
-#  #set node_ips for use in outputs
-#  ctx.instance.runtime_properties['node_ips']=nips[:-1]
-
 c=MongoClient(mip,mport)
 try:
   rsetdone=set()         # keep track of added replicasets
