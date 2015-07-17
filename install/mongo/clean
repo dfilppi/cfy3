@@ -1,0 +1,4 @@
+rm -rf /tmp/tmp*
+rm -rf /tmp/*-*-*-*
+curl -XDELETE 127.0.0.1:9200/install/
+

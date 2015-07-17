@@ -1,0 +1,12 @@
+plugins:
+  wf_plugin:
+    executor: central_deployment_agent
+    source: wf_plugin
+
+workflows:
+  my_install:
+    mapping: wf_plugin.workflows.workflows.install
+    parameters: 
+      resume:
+        description: if true, will resume a previous failed install
+        default: false
