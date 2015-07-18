@@ -51,36 +51,38 @@ class NodeInstallationTasksSequenceCreator(object):
         :param installation_tasks: instance of InstallationTasksReferences
         :param instance: node instance to generate the installation tasks for
         """
-
         sequence = graph.sequence()
+        sequence.add(instance.set_state('initializing'))
         sequence.add(
-            instance.set_state('initializing'),
             forkjoin(
                 installation_tasks.set_state_creating[instance.id],
                 installation_tasks.send_event_creating[instance.id]
-            ),
-            _add_es_log(self._ctx,instance,'create',instance.execute_operation('cloudify.interfaces.lifecycle.create')),
-            instance.set_state('created'),
+            ))
+
+        sequence.add(_add_es_log(self._ctx,instance,'create',instance.execute_operation('cloudify.interfaces.lifecycle.create')))
+        sequence.add(instance.set_state('created'))
+        sequence.add(
             forkjoin(*_relationship_operations(
                 instance,
                 'cloudify.interfaces.relationship_lifecycle.preconfigure'
-            )),
+            )))
+        sequence.add(
             forkjoin(
                 instance.set_state('configuring'),
                 instance.send_event('Configuring node')
-            ),
-            _add_es_log(self._ctx,instance,'configure',instance.execute_operation(
-                'cloudify.interfaces.lifecycle.configure')),
-            instance.set_state('configured'),
+            ))
+        sequence.add(_add_es_log(self._ctx,instance,'configure',instance.execute_operation('cloudify.interfaces.lifecycle.configure')))
+        sequence.add(instance.set_state('configured'))
+        sequence.add(
             forkjoin(*_relationship_operations(
                 instance,
                 'cloudify.interfaces.relationship_lifecycle.postconfigure'
-            )),
-            forkjoin(
+            )))
+        sequence.add(forkjoin(
                 instance.set_state('starting'),
                 instance.send_event('Starting node')
-            ),
-            _add_es_log(self._ctx,instance,'start',instance.execute_operation('cloudify.interfaces.lifecycle.start')))
+            ))
+        sequence.add(_add_es_log(self._ctx,instance,'start',instance.execute_operation('cloudify.interfaces.lifecycle.start')))
 
         # If this is a host node, we need to add specific host start
         # tasks such as waiting for it to start and installing the agent
@@ -562,7 +564,7 @@ def _create_handler(ctx,task,instance,step,cbtype):
     es=ES(ctx)
     pld=_create_payload(ctx.deployment.id,task,instance,step,cbtype)
     ctx.logger.info("posting {}:{}".format(cbtype,pld))
-    resp=es.post("install/{}".format(ctx.deployment.id),pld)
+    resp=es.post(ctx.deployment.id,pld)
     ctx.logger.info("response={}".format(resp))
     if(curcb):
       return curcb(curtask)
@@ -576,7 +578,14 @@ def _create_handler(ctx,task,instance,step,cbtype):
     
 
 #
-# Represents an ElasticSearch connection
+# Delete history for current deployment
+#
+def _clear_install_history(ctx):
+  return ES(ctx).delete(ctx.deployment.id)
+
+#
+# Represents an ElasticSearch connection.  Only operates on the
+# install index
 #
 class ES(object):
 
@@ -598,28 +607,29 @@ class ES(object):
 
   def get(self,path,payload=None):
     if(payload):
-      response=requests.get(self._esurl+path,data=json.dumps(payload))
+      response=requests.get(self._esurl+"install/"+path,data=json.dumps(payload))
     else:
-      response=requests.get(self._esurl+path)
+      response=requests.get(self._esurl+"install/"+path)
     return response
 
   def post(self,path,payload):
-    response=requests.post(self._esurl+path,data=json.dumps(payload))
+    response=requests.post(self._esurl+"install/"+path,data=json.dumps(payload))
     return response
 
+  def delete(self,path):
+    return requests.delete(self._esurl+"install/"+path)
 #
 # Get an install history
 #
 class InstallHistory(object):
-  # install histories are based on deployment id (did)
-  def __init__(self,ctx,did):
-    self._did=did
+  def __init__(self,ctx):
+    self._did=ctx.deployment.id
     self._es=ES(ctx)
     self._get_history()
     self._history=self._get_history()
 
   def _get_history(self):
-    hist=self._es.get("install/{}/_search?size=1000000".format(self._did)).json()
+    hist=self._es.get("{}/_search?size=1000000".format(self._did)).json()
     self._history=[]
     for hit in hist['hits']['hits']:
       self._history.append(InstallEvent(hit))
