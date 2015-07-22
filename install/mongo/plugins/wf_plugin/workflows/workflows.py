@@ -21,11 +21,23 @@ import requests
 import json
 
 
-def _get_all_nodes_instances(ctx):
+#
+# get a list of all nodes, if resume, filter out those started
+#
+def _get_all_nodes_instances(ctx,resume=False):
     node_instances = set()
+    if resume:
+      hist=InstallHistory(ctx)
+      started=_instances_started(ctx,hist)
     for node in ctx.nodes:
         for instance in node.instances:
-            node_instances.add(instance)
+            if(resume and not instance.id in started):
+              ctx.logger.info("resuming: adding instance {}".format(instance.id))
+              node_instances.add(instance)
+            elif (not instance.id in started):
+              ctx.logger.info("resuming: skipping instance {}".format(instance.id))
+            else:
+              node_instances.add(instance)
     return node_instances
 
 
@@ -46,43 +58,69 @@ class NodeInstallationTasksSequenceCreator(object):
       self._ctx=ctx
 
 
-    def create(self, instance, graph, installation_tasks):
+    # Create the task sequence.  If "hist" supplied, resuming
+    def create(self, instance, graph, installation_tasks, hist=None):
         """
         :param installation_tasks: instance of InstallationTasksReferences
         :param instance: node instance to generate the installation tasks for
         """
-        sequence = graph.sequence()
-        sequence.add(instance.set_state('initializing'))
-        sequence.add(
-            forkjoin(
-                installation_tasks.set_state_creating[instance.id],
-                installation_tasks.send_event_creating[instance.id]
-            ))
+        if hist:
+          ct=_completed_tasks(self._ctx,hist,instance.id)
 
-        sequence.add(_add_es_log(self._ctx,instance,'create',instance.execute_operation('cloudify.interfaces.lifecycle.create')))
-        sequence.add(instance.set_state('created'))
-        sequence.add(
-            forkjoin(*_relationship_operations(
-                instance,
-                'cloudify.interfaces.relationship_lifecycle.preconfigure'
-            )))
-        sequence.add(
-            forkjoin(
-                instance.set_state('configuring'),
-                instance.send_event('Configuring node')
-            ))
-        sequence.add(_add_es_log(self._ctx,instance,'configure',instance.execute_operation('cloudify.interfaces.lifecycle.configure')))
-        sequence.add(instance.set_state('configured'))
-        sequence.add(
-            forkjoin(*_relationship_operations(
-                instance,
-                'cloudify.interfaces.relationship_lifecycle.postconfigure'
-            )))
-        sequence.add(forkjoin(
-                instance.set_state('starting'),
-                instance.send_event('Starting node')
-            ))
-        sequence.add(_add_es_log(self._ctx,instance,'start',instance.execute_operation('cloudify.interfaces.lifecycle.start')))
+        sequence = graph.sequence()
+
+        # CREATION
+        run=True
+        if(hist and 'create' in ct):
+          run=False
+
+        if(run):
+          sequence.add(instance.set_state('initializing'))
+          sequence.add(
+              forkjoin(
+                  installation_tasks.set_state_creating[instance.id],
+                  installation_tasks.send_event_creating[instance.id]
+              ))
+
+          sequence.add(_add_es_log(self._ctx,instance,'create',instance.execute_operation('cloudify.interfaces.lifecycle.create')))
+          sequence.add(instance.set_state('created'))
+          sequence.add(
+              forkjoin(*_relationship_operations(
+                  instance,
+                  'cloudify.interfaces.relationship_lifecycle.preconfigure'
+              )))
+
+
+        # CONFIGURATION
+        run=True
+        if(hist and 'configure' in ct):
+          run=False
+
+        if(run):
+          sequence.add(
+              forkjoin(
+                  instance.set_state('configuring'),
+                  instance.send_event('Configuring node')
+              ))
+          sequence.add(_add_es_log(self._ctx,instance,'configure',instance.execute_operation('cloudify.interfaces.lifecycle.configure')))
+          sequence.add(instance.set_state('configured'))
+          sequence.add(
+              forkjoin(*_relationship_operations(
+                  instance,
+                  'cloudify.interfaces.relationship_lifecycle.postconfigure'
+              )))
+
+        # STARTING
+        run=True
+        if(hist and 'start' in ct):
+          run=False
+
+        if(run):
+          sequence.add(forkjoin(
+                  instance.set_state('starting'),
+                  instance.send_event('Starting node')
+              ))
+          sequence.add(_add_es_log(self._ctx,instance,'start',instance.execute_operation('cloudify.interfaces.lifecycle.start')))
 
         # If this is a host node, we need to add specific host start
         # tasks such as waiting for it to start and installing the agent
@@ -102,22 +140,33 @@ class NodeInstallationTasksSequenceCreator(object):
 
 
 class InstallationTasksGraphFinisher(object):
-    def __init__(self, graph, node_instances, intact_nodes, tasks):
+    def __init__(self, graph, node_instances, intact_nodes, tasks, history=None):
         self.graph = graph
         self.node_instances = node_instances
         self.intact_nodes = intact_nodes
         self.tasks = tasks
+        self.hist=history
 
     def _enforce_correct_src_trg_order(self, instance, rel):
         """
         make a dependency between the create tasks (event, state)
         and the started state task of the target
         """
-        target_set_started = self.tasks.set_state_started[rel.target_id]
-        node_set_creating = self.tasks.set_state_creating[instance.id]
-        node_event_creating = self.tasks.send_event_creating[instance.id]
-        self.graph.add_dependency(node_set_creating, target_set_started)
-        self.graph.add_dependency(node_event_creating, target_set_started)
+        if self.hist:
+          target_set_started = self.tasks.set_state_started[rel.target_id]
+          node_set_creating = self.tasks.set_state_creating[instance.id]
+          node_event_creating = self.tasks.send_event_creating[instance.id]
+          if(self.graph.get_task(node_set_creating) and
+               self.graph.get_task(node_event_creating) and
+               self.graph.target_set_started): 
+            self.graph.add_dependency(node_set_creating, target_set_started)
+            self.graph.add_dependency(node_event_creating, target_set_started)
+        else:
+          target_set_started = self.tasks.set_state_started[rel.target_id]
+          node_set_creating = self.tasks.set_state_creating[instance.id]
+          node_event_creating = self.tasks.send_event_creating[instance.id]
+          self.graph.add_dependency(node_set_creating, target_set_started)
+          self.graph.add_dependency(node_event_creating, target_set_started)
 
     def finish_creation(self):
         # Create task dependencies based on node relationships
@@ -152,6 +201,10 @@ class RuntimeInstallationTasksGraphFinisher(InstallationTasksGraphFinisher):
 def _install_node_instances(ctx, node_instances, intact_nodes,
                             node_tasks_seq_creator, graph_finisher_cls,resume):
 
+    hist=None
+    if resume:
+      hist=InstallHistory(ctx)
+      
     # switch to graph mode (operations on the context return tasks instead of
     # result instances)
     graph = ctx.graph_mode()
@@ -171,13 +224,14 @@ def _install_node_instances(ctx, node_instances, intact_nodes,
     # For each node, we create a "task sequence" in which all tasks
     # added to it will be executed in a sequential manner
     for instance in node_instances:
-        node_tasks_seq_creator.create(instance, graph, tasks)
+        node_tasks_seq_creator.create(instance, graph, tasks, hist)
 
     graph_finisher_cls(
         graph,
         node_instances,
         intact_nodes,
-        tasks
+        tasks,
+        hist
     ).finish_creation()
 
     graph.execute()
@@ -465,7 +519,7 @@ def install(ctx, **kwargs):
 
     _install_node_instances(
         ctx,
-        _get_all_nodes_instances(ctx),
+        _get_all_nodes_instances(ctx,kwargs['resume']),
         set(),
         NodeInstallationTasksSequenceCreator(ctx),
         InstallationTasksGraphFinisher,
@@ -584,6 +638,38 @@ def _clear_install_history(ctx):
   return ES(ctx).delete(ctx.deployment.id)
 
 #
+# Return node instances that have been started
+#
+def _instances_started(ctx,hist):
+  if(ctx==None):
+    raise "null ctx supplied"
+  if(hist==None):
+    raise "null hist supplied"
+  started={}
+  
+  for event in hist.history:
+    if(event.step == 'start' and event.status == 'success'):
+      ctx.logger.info("detecting started: added {}".format(event.instance_id))
+      started[event.instance_id]=event
+
+  return started  
+
+#
+# Return completed tasks for instance id
+#
+def _completed_tasks(ctx,hist,instance_id): 
+  completed={}
+  for event in hist.history:
+    if(event.instance_id==instance_id):
+      ctx.logger.info("found task for {}.  step={} status={}".format(instance_id,event.step,event.status))
+      if(event.status=="success"):
+        ctx.logger.info("   added: {} step={}".format(instance_id,event.step,event.status))
+        completed[event.step]=event
+
+  return completed
+  
+
+#
 # Represents an ElasticSearch connection.  Only operates on the
 # install index
 #
@@ -631,8 +717,9 @@ class InstallHistory(object):
   def _get_history(self):
     hist=self._es.get("{}/_search?size=1000000".format(self._did)).json()
     self._history=[]
-    for hit in hist['hits']['hits']:
-      self._history.append(InstallEvent(hit))
+    if('hits' in hist and 'hist' in hist['hits']):
+      for hit in hist['hits']['hits']:
+        self._history.append(InstallEvent(hit))
     return self._history
 
   @property
