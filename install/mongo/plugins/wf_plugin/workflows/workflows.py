@@ -26,6 +26,7 @@ import json
 #
 def _get_all_nodes_instances(ctx,resume=False):
     node_instances = set()
+    started=set()
     if resume:
       hist=InstallHistory(ctx)
       started=_instances_started(ctx,hist)
@@ -34,7 +35,7 @@ def _get_all_nodes_instances(ctx,resume=False):
             if(resume and not instance.id in started):
               ctx.logger.info("resuming: adding instance {}".format(instance.id))
               node_instances.add(instance)
-            elif (not instance.id in started):
+            elif(resume and not instance.id in started):
               ctx.logger.info("resuming: skipping instance {}".format(instance.id))
             else:
               node_instances.add(instance)
@@ -519,11 +520,11 @@ def install(ctx, **kwargs):
 
     _install_node_instances(
         ctx,
-        _get_all_nodes_instances(ctx,kwargs['resume']),
+        _get_all_nodes_instances(ctx,str2bool(kwargs['resume'])),
         set(),
         NodeInstallationTasksSequenceCreator(ctx),
         InstallationTasksGraphFinisher,
-        kwargs['resume']
+        str2bool(kwargs['resume'])
     )
 
 
@@ -567,6 +568,10 @@ def auto_heal_reinstall_node_subgraph(
         RuntimeInstallationTasksGraphFinisher,
         None
     )
+
+
+def str2bool(arg):
+  return arg.lower() in set(['true','t','1'])
 
 #
 # Create payload for completion status in ElasticSearch
@@ -649,7 +654,6 @@ def _instances_started(ctx,hist):
   
   for event in hist.history:
     if(event.step == 'start' and event.status == 'success'):
-      ctx.logger.info("detecting started: added {}".format(event.instance_id))
       started[event.instance_id]=event
 
   return started  
@@ -709,6 +713,7 @@ class ES(object):
 #
 class InstallHistory(object):
   def __init__(self,ctx):
+    self._ctx=ctx
     self._did=ctx.deployment.id
     self._es=ES(ctx)
     self._get_history()
@@ -716,8 +721,9 @@ class InstallHistory(object):
 
   def _get_history(self):
     hist=self._es.get("{}/_search?size=1000000".format(self._did)).json()
+    self._ctx.logger.info("get history:{}".format(hist))
     self._history=[]
-    if('hits' in hist and 'hist' in hist['hits']):
+    if('hits' in hist and 'hits' in hist['hits']):
       for hit in hist['hits']['hits']:
         self._history.append(InstallEvent(hit))
     return self._history
