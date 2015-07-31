@@ -1,0 +1,74 @@
+tosca_definitions_version: cloudify_dsl_1_1
+
+imports:  
+  - http://www.getcloudify.org/spec/cloudify/3.2/types.yaml
+  - http://www.getcloudify.org/spec/fabric-plugin/1.2/plugin.yaml
+  - ../plugin/plugin.yaml
+
+node_types:
+  cloudify.kubernetes.base:
+    derived_from: cloudify.nodes.Compute
+    properties:
+      install_agent:
+        default: false
+      host_ip:
+        description: ip address of master host
+      ssh_keyfilename:
+        description: file name that holds ssh key for passwordless operation
+        default: ''
+      ssh_username:
+        description: ssh user
+      ssh_password:
+        description: ssh password when not using passwordless operation
+        default: ''
+      ssh_port:
+        description: ssh port.  defaults to 22
+        default: 22
+      
+
+  cloudify.kubernetes.master:
+    derived_from: cloudify.kubernetes.base
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: fabric.fabric_plugin.tasks.run_commands
+          inputs: 
+            commands:
+              default:
+                - sudo docker run --net=host -d gcr.io/google_containers/etcd:2.0.9 /usr/local/bin/etcd --addr=127.0.0.1:4001 --bind-addr=0.0.0.0:4001 --data-dir=/var/etcd/data
+                - sudo docker run --net=host -d -v /var/run/docker.sock:/var/run/docker.sock  gcr.io/google_containers/hyperkube:v0.21.2 /hyperkube kubelet --api_servers=http://localhost:8080 --v=2 --address=0.0.0.0 --enable_server --hostname_override=127.0.0.1 --config=/etc/kubernetes/manifests
+            fabric_env:
+              default:
+                user: { get_property: [SELF,ssh_username]}
+                password: { get_property: [SELF,ssh_password]}
+                key_filename: { get_property: [SELF,ssh_keyfilename]}
+                host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, host_ip] }] }
+                port: { get_property: [SELF,ssh_port]}
+
+  cloudify.kubernetes.node:
+    derived_from: cloudify.kubernetes.base
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: fabric.fabric_plugin.tasks.run_commands
+          inputs: 
+            commands:
+              default:
+                - sudo docker run --net=host -d -v /var/run/docker.sock:/var/run/docker.sock  gcr.io/google_containers/hyperkube:v0.21.2 /hyperkube kubelet --api_servers=http://localhost:8080 --v=2 --address=0.0.0.0 --enable_server --hostname_override=127.0.0.1 --config=/etc/kubernetes/manifests
+                - sudo docker run -d --net=host --privileged gcr.io/google_containers/hyperkube:v0.21.2 /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
+            fabric_env:
+              default:
+                user: { get_property: [SELF,ssh_username]}
+                password: { get_property: [SELF,ssh_password]}
+                key_filename: { get_property: [SELF,ssh_keyfilename]}
+                host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, host_ip] }] }
+                port: { get_property: [SELF,ssh_port]}
+    
+node_templates:
+  test:
+    type: cloudify.kubernetes.master
+    properties:
+      host_ip: 10.67.79.127
+      ssh_username: ubuntu
+      ssh_keyfilename: /home/ubuntu/dfilppi-kp.pem
+

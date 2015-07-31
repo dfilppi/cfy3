@@ -29,7 +29,7 @@ setup(
     description='plugin that provides kubernetes interop/orchestration',
 
     # This must correspond to the actual packages in the plugin.
-    packages=['plugin'],
+    packages=['kube_plugin'],
 
     license='LICENSE',
     install_requires=[
