@@ -17,5 +17,16 @@
 # Kubernetes plugin implementation
 #
 
-def dummy():
-  pass
+from cloudify.decorators import operation
+from cloudify import ctx
+
+
+# Called when connecting to master.  Gets ip and port
+@operation
+def connect_master(**kwargs):
+  if(ctx._local):
+    ctx.source.instance.runtime_properties['master_ip']=ctx.target.node.properties['ip']
+  else:
+    ctx.source.instance.runtime_properties['master_ip']=ctx.target.instance.runtime_properties['host_ip']
+  ctx.source.instance.runtime_properties['master_port']=ctx.target.node.properties['master_port']
+

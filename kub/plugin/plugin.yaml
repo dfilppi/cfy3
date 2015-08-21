@@ -1,1 +1,82 @@
+plugins:
+  kubernetes:
+    executor: central_deployment_agent
+    source: /home/ubuntu/kub/plugin
 
+node_types:
+  cloudify.kubernetes.base:
+    derived_from: cloudify.nodes.Compute
+    properties:
+      install_agent:
+        default: false
+      ssh_keyfilename:
+        description: file name that holds ssh key for passwordless operation
+        default: ''
+      ssh_username:
+        description: ssh user
+      ssh_password:
+        description: ssh password when not using passwordless operation
+        default: ''
+      ssh_port:
+        description: ssh port.  defaults to 22
+        default: 22
+      
+
+  ##########################################
+  # Represents a master/node
+  ##########################################
+  cloudify.kubernetes.master:
+    derived_from: cloudify.kubernetes.base
+    properties:
+      master_port:
+        default: 8080
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: fabric.fabric_plugin.tasks.run_module_task
+          inputs: 
+            task_mapping:
+              default: kube_plugin.start-master-ubuntu14-tasks.start_master
+            fabric_env:
+              default:
+                user: { get_property: [SELF,ssh_username]}
+                password: { get_property: [SELF,ssh_password]}
+                key_filename: { get_property: [SELF,ssh_keyfilename]}
+                host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, ip] }] }
+                port: { get_property: [SELF,ssh_port]}
+
+  ##########################################
+  # Represents a minion/node
+  ##########################################
+  cloudify.kubernetes.node:
+    derived_from: cloudify.kubernetes.base
+    properties:
+      master_ip:
+        default: ''
+      master_port:
+        default: 0
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: fabric.fabric_plugin.tasks.run_module_task
+          inputs: 
+            task_mapping:
+              default: kube_plugin.start-node-ubuntu14-tasks.start_node
+            task_name:
+              default: start_node
+            fabric_env:
+              default:
+                user: { get_property: [SELF,ssh_username]}
+                password: { get_property: [SELF,ssh_password]}
+                key_filename: { get_property: [SELF,ssh_keyfilename]}
+                host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, ip] }] }
+                port: { get_property: [SELF,ssh_port]}
+    
+
+relationships:
+  cloudify.kubernetes.relationships.connected_to_master:
+    derived_from: cloudify.relationships.connected_to
+    source_interfaces:
+      cloudify.interfaces.relationship_lifecycle:
+        postconfigure:
+          implementation: kubernetes.kube_plugin.tasks.connect_master

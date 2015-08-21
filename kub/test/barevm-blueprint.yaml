@@ -1,0 +1,25 @@
+tosca_definitions_version: cloudify_dsl_1_1
+
+imports:  
+  - http://www.getcloudify.org/spec/cloudify/3.2.1/types.yaml
+  - http://www.getcloudify.org/spec/fabric-plugin/1.2.1/plugin.yaml
+  - ../plugin/plugin.yaml
+
+node_templates:
+
+  master:
+    type: cloudify.kubernetes.master
+    properties:
+      ip: 10.67.79.129
+      ssh_username: ubuntu
+      ssh_keyfilename: /home/ubuntu/dfilppi-kp.pem
+
+  minion:
+    type: cloudify.kubernetes.node
+    properties:
+      ip: 10.67.79.130
+      ssh_username: ubuntu
+      ssh_keyfilename: /home/ubuntu/dfilppi-kp.pem
+    relationships:
+      - type: cloudify.kubernetes.relationships.connected_to_master
+        target: master
