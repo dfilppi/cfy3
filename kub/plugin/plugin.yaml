@@ -30,6 +30,8 @@ node_types:
     properties:
       master_port:
         default: 8080
+      install:
+        default: True
     interfaces:
       cloudify.interfaces.lifecycle:
         start:

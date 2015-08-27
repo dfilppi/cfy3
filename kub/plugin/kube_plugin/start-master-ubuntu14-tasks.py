@@ -6,6 +6,9 @@ import subprocess
 import time
 
 def start_master():
+
+  if(not ctx.node.properties['install']):
+    return
   
   master_ip=ctx.node.properties['ip']
   master_port=ctx.node.properties['master_port']
