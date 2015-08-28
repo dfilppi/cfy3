@@ -82,3 +82,77 @@ relationships:
       cloudify.interfaces.relationship_lifecycle:
         postconfigure:
           implementation: kubernetes.kube_plugin.tasks.connect_master
+
+workflows:
+  kube_run:
+    mapping: kubernetes.kube_plugin.workflows.kube_run
+    parameters:
+      master:
+        description: name of master node
+      name:
+        description: name of the app
+      image:
+        description: image to run
+      port:
+        description: port to open
+        default: -1
+      replicas:
+        description: number of replicas
+        default: 1
+      dry_run:
+        description: don't actually do anything
+        default: False
+      overrides:
+        description: json overrides
+        default: ''
+
+  kube_expose:
+    mapping: kubernetes.kube_plugin.workflows.kube_expose
+    parameters:
+      master:
+        description: name of master node
+      name:
+        description: name of the resource to expose
+      resource:
+        description: type of the resource to be exposed
+      protocol:
+        description: protocol to expose (TCP|UDP)
+        default: TCP
+      port:
+        description: the port to be exposed
+      target_port:
+        description: container port to expose
+        default: -1
+      service_name:
+        description: name of the newly created object
+        default: ''
+      overrides:
+        description: json overrides
+        default: ''
+
+  kube_stop:
+    mapping: kubernetes.kube_plugin.workflows.kube_stop
+    parameters:
+      master:
+        description: name of master node
+      name:
+        description: name of the resource to stop
+      resource:
+        description: type of the resource to be stopped
+      all:
+        description: stop all
+        default: False
+  
+  kube_delete:
+    mapping: kubernetes.kube_plugin.workflows.kube_delete
+    parameters:
+      master:
+        description: name of master node
+      name:
+        description: name of the resource to delete
+      resource:
+        description: type of the resource to be deleted
+      all:
+        description: stop all
+        default: False
+      
