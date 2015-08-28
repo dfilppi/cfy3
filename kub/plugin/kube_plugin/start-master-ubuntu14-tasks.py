@@ -63,3 +63,7 @@ def start_master():
   
   # run the proxy
   sudo("docker run -d --net=host --privileged gcr.io/google_containers/hyperkube:v1.0.1 /hyperkube proxy --master=http://127.0.0.1:{} --v=2".format(master_port),shell=True)
+
+  # get kubectl
+  run("wget http://storage.googleapis.com/kubernetes-release/release/v1.0.1/bin/linux/amd64/kubectl -O kubectl")
+  run("chmod +x kubectl")
