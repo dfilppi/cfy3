@@ -19,7 +19,7 @@
 
 from cloudify.decorators import operation
 from cloudify import ctx
-
+from fabric.api import run,env
 
 # Called when connecting to master.  Gets ip and port
 @operation
@@ -29,4 +29,31 @@ def connect_master(**kwargs):
   else:
     ctx.source.instance.runtime_properties['master_ip']=ctx.target.instance.runtime_properties['host_ip']
   ctx.source.instance.runtime_properties['master_port']=ctx.target.node.properties['master_port']
+  ctx.source.instance.runtime_properties['ssh_username']=ctx.target.node.properties['ssh_username']
+  ctx.source.instance.runtime_properties['ssh_password']=ctx.target.node.properties['ssh_password']
+  ctx.source.instance.runtime_properties['ssh_port']=ctx.target.node.properties['ssh_port']
+  ctx.source.instance.runtime_properties['ssh_keyfilename']=ctx.target.node.properties['ssh_keyfilename']
 
+@operation
+def kube_run_expose(**kwargs):
+  fabenv={}
+  fabenv['user']=ctx.instance.runtime_properties['ssh_username']
+  fabenv['password']=ctx.instance.runtime_properties['ssh_password']
+  fabenv['key_filename']=ctx.instance.runtime_properties['ssh_keyfilename']
+  fabenv['host_string']=ctx.instance.runtime_properties['ssh_username']+'@'+ctx.instance.runtime_properties['master_ip']
+  fabenv['port']=ctx.instance.runtime_properties['ssh_port']
+  env.update(fabenv)
+
+  # do kubectl run
+  cmd='./kubectl -s http://localhost:8080 run {} --image={} --port={} --replicas={}'.format(ctx.node.properties['name'],ctx.node.properties['image'],ctx.node.properties['target_port'],ctx.node.properties['replicas'])
+  if(ctx.node.properties['run_overrides']):
+    cmd=cmd+" --overrides={}".format(ctx.node.properties['run_overrides'])
+
+  run(cmd)
+
+  # do kubectl expose
+  cmd='./kubectl -s http://localhost:8080 expose rc {} --port={} --protocol={}'.format(ctx.node.properties['name'],ctx.node.properties['port'],ctx.node.properties['protocol'])
+  if(ctx.node.properties['expose_overrides']):
+    cmd=cmd+" --overrides={}".format(ctx.node.properties['expose_overrides'])
+
+  run(cmd)

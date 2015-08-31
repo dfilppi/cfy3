@@ -4,7 +4,7 @@ plugins:
     source: /home/ubuntu/kub/plugin
 
 node_types:
-  cloudify.kubernetes.base:
+  cloudify.kubernetes.Base:
     derived_from: cloudify.nodes.Compute
     properties:
       install_agent:
@@ -25,8 +25,8 @@ node_types:
   ##########################################
   # Represents a master/node
   ##########################################
-  cloudify.kubernetes.master:
-    derived_from: cloudify.kubernetes.base
+  cloudify.kubernetes.Master:
+    derived_from: cloudify.kubernetes.Base
     properties:
       master_port:
         default: 8080
@@ -50,8 +50,8 @@ node_types:
   ##########################################
   # Represents a minion/node
   ##########################################
-  cloudify.kubernetes.node:
-    derived_from: cloudify.kubernetes.base
+  cloudify.kubernetes.Node:
+    derived_from: cloudify.kubernetes.Base
     properties:
       master_ip:
         default: ''

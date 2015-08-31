@@ -1,7 +1,6 @@
 from cloudify.decorators import workflow
 from cloudify.workflows import ctx
 import re
-import requests
 from fabric.api import run,env
 
 
