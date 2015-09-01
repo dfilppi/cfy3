@@ -74,6 +74,40 @@ node_types:
                 host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, ip] }] }
                 port: { get_property: [SELF,ssh_port]}
     
+  ##########################################
+  # Represents a kubernetes service
+  ##########################################
+  cloudify.kubernetes.Microservice:
+    derived_from: cloudify.nodes.Container
+    properties:
+      install_agent:
+        default: false
+      name:
+        description: the name of the service
+      image:
+        description: the image to run
+      port:
+        description: the port for the service
+      target_port:
+        description: the target port to map
+        default: {get_property: [SELF,port]}
+      protocol:
+        description: the service protocol { TCP|UDP }  TCP default
+        default: TCP
+      replicas:
+        description: the number of instances to run
+        default: 1
+      run_overrides:
+        description: json overrides for kubectl run
+        default: ''
+      expose_overrides:
+        description: json overrides for kubectl expose
+        default: ''
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: kubernetes.kube_plugin.tasks.kube_run_expose
+
 
 relationships:
   cloudify.kubernetes.relationships.connected_to_master:
