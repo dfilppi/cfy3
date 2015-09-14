@@ -1,12 +1,17 @@
+from kube_plugin import get_docker
 from cloudify import ctx
 from fabric.api import run,sudo,put
 import os.path
-import edit_docker_config
 import subprocess
 import time
 
 def start_node():
+  if(not ctx.node.properties['install']):
+    return
 
+  if(ctx.node.properties['install_docker']):
+    get_docker()
+  
   master_ip=ctx.instance.runtime_properties['master_ip']
   master_port=ctx.instance.runtime_properties['master_port']
 
@@ -30,7 +35,7 @@ def start_node():
   flannel=";".join(flannel.split())
 
   # edit docker config
-  script=os.path.abspath(edit_docker_config.__file__)
+  script=os.path.dirname(os.path.realpath(__file__))+"/edit_docker_config.py"
   put(script,"/tmp/edit_docker_config.py")
   sudo("python /tmp/edit_docker_config.py '{}'".format(flannel),shell=True)
 

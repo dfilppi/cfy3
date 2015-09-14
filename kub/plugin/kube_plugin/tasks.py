@@ -19,7 +19,8 @@
 
 from cloudify.decorators import operation
 from cloudify import ctx
-from fabric.api import run,env
+from fabric.api import run,env,put
+import yaml
 
 # Called when connecting to master.  Gets ip and port
 @operation
@@ -36,6 +37,9 @@ def connect_master(**kwargs):
 
 @operation
 def kube_run_expose(**kwargs):
+  config=ctx.node.properties['config']
+#  ctx.logger.info("-->config={}".format(yaml.safe_dump(ctx.node.properties['config'])))
+
   fabenv={}
   fabenv['user']=ctx.instance.runtime_properties['ssh_username']
   fabenv['password']=ctx.instance.runtime_properties['ssh_password']
@@ -44,16 +48,26 @@ def kube_run_expose(**kwargs):
   fabenv['port']=ctx.instance.runtime_properties['ssh_port']
   env.update(fabenv)
 
-  # do kubectl run
-  cmd='./kubectl -s http://localhost:8080 run {} --image={} --port={} --replicas={}'.format(ctx.node.properties['name'],ctx.node.properties['image'],ctx.node.properties['target_port'],ctx.node.properties['replicas'])
-  if(ctx.node.properties['run_overrides']):
-    cmd=cmd+" --overrides={}".format(ctx.node.properties['run_overrides'])
+  if(config):
+    fname="/tmp/kub_{}.yaml".format(ctx.instance.id)
+    with open(fname,'w') as f:
+      yaml.safe_dump(config,f)
+    put(fname,fname)
+    cmd="./kubectl -s http://localhost:8080 create -f "+fname
 
-  run(cmd)
+    run(cmd)
 
-  # do kubectl expose
-  cmd='./kubectl -s http://localhost:8080 expose rc {} --port={} --protocol={}'.format(ctx.node.properties['name'],ctx.node.properties['port'],ctx.node.properties['protocol'])
-  if(ctx.node.properties['expose_overrides']):
-    cmd=cmd+" --overrides={}".format(ctx.node.properties['expose_overrides'])
+  else:
+    # do kubectl run
+    cmd='./kubectl -s http://localhost:8080 run {} --image={} --port={} --replicas={}'.format(ctx.node.properties['name'],ctx.node.properties['image'],ctx.node.properties['target_port'],ctx.node.properties['replicas'])
+    if(ctx.node.properties['run_overrides']):
+      cmd=cmd+" --overrides={}".format(ctx.node.properties['run_overrides'])
 
-  run(cmd)
+    run(cmd)
+
+    # do kubectl expose
+    cmd='./kubectl -s http://localhost:8080 expose rc {} --port={} --protocol={}'.format(ctx.node.properties['name'],ctx.node.properties['port'],ctx.node.properties['protocol'])
+    if(ctx.node.properties['expose_overrides']):
+      cmd=cmd+" --overrides={}".format(ctx.node.properties['expose_overrides'])
+
+    run(cmd)
