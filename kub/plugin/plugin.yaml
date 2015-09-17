@@ -1,7 +1,7 @@
 plugins:
   kubernetes:
     executor: central_deployment_agent
-    source: /home/ubuntu/kub/plugin
+    source: /home/vagrant/cfy3/mongo/plugins/kubernetes
 
 node_types:
   cloudify.kubernetes.Base:
@@ -20,6 +20,12 @@ node_types:
       ssh_port:
         description: ssh port.  defaults to 22
         default: 22
+      install_docker:
+        description: install docker
+        default: false
+      install:
+        description: install kubernetes
+        default: true
       
 
   ##########################################
@@ -28,10 +34,10 @@ node_types:
   cloudify.kubernetes.Master:
     derived_from: cloudify.kubernetes.Base
     properties:
+      install_docker:
+        default: false
       master_port:
         default: 8080
-      install:
-        default: True
     interfaces:
       cloudify.interfaces.lifecycle:
         start:
@@ -46,6 +52,7 @@ node_types:
                 key_filename: { get_property: [SELF,ssh_keyfilename]}
                 host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, ip] }] }
                 port: { get_property: [SELF,ssh_port]}
+                connection_attempts: 20
 
   ##########################################
   # Represents a minion/node
@@ -73,6 +80,7 @@ node_types:
                 key_filename: { get_property: [SELF,ssh_keyfilename]}
                 host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, ip] }] }
                 port: { get_property: [SELF,ssh_port]}
+                connection_attempts: 20
     
   ##########################################
   # Represents a kubernetes service
@@ -84,10 +92,13 @@ node_types:
         default: false
       name:
         description: the name of the service
+        default: ''
       image:
         description: the image to run
+        default: ''
       port:
         description: the port for the service
+        default: -1
       target_port:
         description: the target port to map
         default: {get_property: [SELF,port]}
@@ -102,6 +113,15 @@ node_types:
         default: ''
       expose_overrides:
         description: json overrides for kubectl expose
+        default: ''
+      config:
+        description: key/values in kubernetes format. if config_path also defined, merge these values with file contents
+        default: {}
+      config_path:
+        description: external kubernetes manifest for service
+        default: ''
+      config_overrides:
+        description: overrides in python format for config_path settings
         default: ''
     interfaces:
       cloudify.interfaces.lifecycle:
