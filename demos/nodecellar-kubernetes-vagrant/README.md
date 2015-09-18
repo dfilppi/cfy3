@@ -44,20 +44,30 @@ Demonstrates a hybrid deployment on Vagrant using the simple manager and Kuberne
  </ul>
 </ul>
 
-- Install cfy on mongo
- - ssh in: 'vagrant ssh mongo'
- - install cfy cli
-  - sudo apt-get update
-  - sudo apt-get install -y python-dev
-  - sudo apt-get install -y python-virtualenv
-  - virtualenv .
-  - . bin/activate
-  - pip install cloudify
-  - test success: 'cfy --version'
+<ul>
+<li>Install cfy on mongo
+ <ul>
+  <li>ssh in: 'vagrant ssh mongo'
+  <li>install cfy cli
+  <ul>
+   <li>sudo apt-get update
+   <li>sudo apt-get install -y python-dev
+   <li>sudo apt-get install -y python-virtualenv
+   <li>virtualenv .
+   <li>. bin/activate
+   <li>pip install cloudify
+   <li>test success: 'cfy --version'
+  </ul>
+ </ul>
+</ul>
 
-- Run the blueprint
- - copy the contents of mongohome/ to the /home/vagrant dir on mongo
- - cd to cfy3/mongo
- - run 'cfy local install-plugins -p local-blueprint.yaml'
- - run 'cfy local init -p local-blueprint.yaml'
- - run 'cfy local execute -w install'
+<ul>
+<li>Run the blueprint
+ <ul>
+  <li>copy the contents of mongohome/ to the /home/vagrant dir on mongo
+  <li>cd to cfy3/mongo
+  <li>run 'cfy local install-plugins -p local-blueprint.yaml'
+  <li>run 'cfy local init -p local-blueprint.yaml'
+  <li>run 'cfy local execute -w install'
+ </ul>
+</ul>
