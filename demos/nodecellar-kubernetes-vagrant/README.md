@@ -12,10 +12,11 @@ Requirements:
 
 Instructions:
 
-- Using the Vagrantfile in scripts/, bootstrap the environment
- - copy Vagrant file to an empty directory
- - from the directory execute: "vagrant up"
- - result:  two VMs, one named 'kub' and one named 'mongo'
+<ul> Using the Vagrantfile in scripts/, bootstrap the environment
+ <li> copy Vagrant file to an empty directory
+ <li> from the directory execute: "vagrant up"
+ <li> result:  two VMs, one named 'kub' and one named 'mongo'
+</ul>
 
 - Start kubernetes on kub
  - ssh in: 'vagrant ssh kub'
