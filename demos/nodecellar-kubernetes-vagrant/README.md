@@ -1,8 +1,8 @@
-Description:
+## Description:
 
 Demonstrates a hybrid deployment on Vagrant using the simple manager and Kubernetes.  Result is the usual nodecellar demo.
 
-Requirements:
+## Requirements:
 
 - Vagrant: two VM config, one to host Kubernetes and nodejs, the other the Cloudify CLI and Mongodb
 - Access to docker image on DockerHub for nodejs.  __DEMO REQUIRES INTERNET ACCESS__ (at least on the first run)
@@ -10,12 +10,14 @@ Requirements:
 - A machine with Virtualbox >= 4.3
 - A machine with Vagrant >= 1.6.3
 
-Instructions:
-
-<ul> Using the Vagrantfile in scripts/, bootstrap the environment
- <li> copy Vagrant file to an empty directory
- <li> from the directory execute: "vagrant up"
- <li> result:  two VMs, one named 'kub' and one named 'mongo'
+## Instructions:
+<ul>
+ <li>Using the Vagrantfile in scripts/, bootstrap the environment
+ <ul>
+  <li> copy Vagrant file to an empty directory
+  <li> from the directory execute: "vagrant up"
+  <li> result:  two VMs, one named 'kub' and one named 'mongo'
+ </ul>
 </ul>
 
 - Start kubernetes on kub
