@@ -23,6 +23,10 @@ node_types:
         description: MongoDB port
         type: integer
         default: 27017
+      install:
+        description: install or just connect to existing
+        type: boolean
+        default: true
     interfaces:
       cloudify.interfaces.lifecycle:
         create: scripts/mongo/install-mongo.sh

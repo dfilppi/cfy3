@@ -60,6 +60,7 @@ ctx.logger.info(command)
 #sub=subprocess.Popen("nohup {} > /dev/null 2>&1".format(command),shell=True)
 sub=subprocess.Popen(['nohup',
                      "{}/bin/mongos".format(mongo_binaries_path),
+                     "--bind_ip","192.168.33.11",
                      "--port","{}".format(port),
                      "--configdb","{}".format(ctx.instance.runtime_properties['cfghosts'])])
 #p=subprocess.Popen(['nohup','bash','-c','sleep 40'])

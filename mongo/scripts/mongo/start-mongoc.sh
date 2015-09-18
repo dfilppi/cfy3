@@ -63,7 +63,8 @@ ctx logger info "cfg instance port: $PORT"
 ctx instance runtime_properties mongo_port $PORT
 
 
-IP=$(ctx instance host_ip)
+#IP=$(ctx instance host_ip)
+IP=192.168.33.11
 INSTANCEID=$(ctx instance id)
 MONGO_ROOT_PATH=$(ctx instance runtime_properties mongo_root_path)
 MONGO_BINARIES_PATH=$(ctx instance runtime_properties mongo_binaries_path)
