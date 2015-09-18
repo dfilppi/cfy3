@@ -1,0 +1,1 @@
+{"relationships": [{"target_name": "joiner", "type": "cloudify.relationships.depends_on", "target_id": "joiner_8e3f1"}], "name": "master", "runtime_properties": {}, "state": "started", "node_id": "master", "version": 7, "host_id": "master_a2391", "id": "master_a2391"}

@@ -1,0 +1,166 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on an existing host.
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_0
+
+imports:  
+  - http://getcloudify.org/spec/cloudify/3.2/types.yaml
+  - http://getcloudify.org/spec/diamond-plugin/1.2/plugin.yaml
+  - http://getcloudify.org/spec/openstack-plugin/1.2/plugin.yaml
+  - types/mongotypes.yaml
+
+
+inputs:
+
+  image:
+    description: >
+      Image to be used when launching agent VM's
+
+  flavor:
+    description: >
+      Flavor of the agent VM's
+
+  agent_user:
+    description: >
+      User for connecting to agent VM's
+
+node_types:
+
+  nodecellar.nodes.MonitoredServer:
+    derived_from: cloudify.openstack.nodes.Server
+    properties:
+      cloudify_agent:
+        default:
+          user: { get_input: agent_user }
+          wait_started_timeout: 60
+      server:
+        default:
+          image: { get_input: image }
+          flavor: { get_input: flavor }
+    interfaces:
+
+      cloudify.interfaces.monitoring_agent:
+          install:
+            implementation: diamond.diamond_agent.tasks.install
+            inputs:
+              diamond_config:
+                default:
+                  interval: 1
+          start: diamond.diamond_agent.tasks.start
+          stop: diamond.diamond_agent.tasks.stop
+          uninstall: diamond.diamond_agent.tasks.uninstall
+
+      cloudify.interfaces.monitoring:
+          start:
+            implementation: diamond.diamond_agent.tasks.add_collectors
+            inputs:
+              collectors_config:
+                default:
+                  CPUCollector: {}
+                  MemoryCollector: {}
+                  LoadAverageCollector: {}
+                  DiskUsageCollector:
+                    config:
+                      devices: x?vd[a-z]+[0-9]*$
+                  NetworkCollector: {}
+
+node_templates:
+
+  mongod_host:
+    type: nodecellar.nodes.MonitoredServer
+    instances:
+      deploy: 2
+    relationships:
+      - target: mongod_security_group
+        type: cloudify.openstack.server_connected_to_security_group
+
+  mongod_security_group:
+    type: cloudify.openstack.nodes.SecurityGroup
+    properties:
+      security_group:
+        name: mongod_security_group
+        description: mongod security group
+      rules:
+        - remote_ip_prefix: 0.0.0.0/0
+          port: { get_property: [ mongod, port ] }
+        - remote_ip_prefix: 0.0.0.0/0
+          port: 28017
+
+  mongod:
+    type: nodecellar.nodes.Mongod
+    instances:
+      deploy: 1
+    properties:
+      port: 27400
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: mongod_host
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure: scripts/mongo/install-pymongo.sh
+
+  mongoc_host:
+    type: nodecellar.nodes.MonitoredServer
+    instances:
+      deploy: 3
+    relationships:
+
+      ###########################################################
+      # Attaching the mongo security group to the mongo host
+      ###########################################################
+
+      - target: mongoc_security_group
+        type: cloudify.openstack.server_connected_to_security_group
+
+  mongoc_security_group:
+    type: cloudify.openstack.nodes.SecurityGroup
+    properties:
+      security_group:
+        name: mongoc_security_group
+        description: mongoc security group
+      rules:
+        - remote_ip_prefix: 0.0.0.0/0
+          port: { get_property: [ mongoc, port ] }
+        - remote_ip_prefix: 0.0.0.0/0
+          port: 28017
+
+  mongoc:
+    type: nodecellar.nodes.Mongocfg
+    instances:
+      deploy: 1
+    properties:
+      port: 27400
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: mongoc_host
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure: scripts/mongo/install-pymongo.sh
+
+  joiner:
+    type: cloudify.nodes.Compute
+    properties:
+      install_agent: false
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure:
+          implementation: scripts/mongo/install-pymongo.sh
+          executor: central_deployment_agent
+        start:
+          implementation: scripts/mongo/set-joiner-outputs.py
+          executor: central_deployment_agent
+    relationships:
+      - type: joiner_connected_to_mongocfg
+        target: mongoc
+      - type: joiner_connected_to_mongod
+        target: mongod
+
+
+outputs:
+  cluster_info:
+    description: Mongo cluster info
+    value:
+      cfghosts: { get_attribute: [ joiner, cfghosts ]}
+      dbhosts: { get_attribute: [ joiner, dbhosts ]}
