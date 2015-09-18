@@ -20,21 +20,29 @@ Demonstrates a hybrid deployment on Vagrant using the simple manager and Kuberne
  </ul>
 </ul>
 
-- Start kubernetes on kub
- - ssh in: 'vagrant ssh kub'
- - copy scripts/startkub.sh to the home directory on 'kub'
- - install docker
-  - sudo apt-get update
-  - sudo apt-get wget
-  - wget -O getdocker.sh get.docker.com
-  - run getdocker.sh: 'sudo ./getdocker.sh'
-  - test success: 'sudo docker ps'
- - start kubernetes: 'sudo ./startkub.sh'
- - get kubectl
-  - 'wget https://storage.googleapis.com/kubernetes-release/release/v1.0.1/bin/linux/amd64/kubectl'
-  - 'chmod +x kubectl'
- - test kubernetes: './kubectl get pods'  (should get just kubernetes itself)
- - get image: sudo docker pull dfilppi/nodecellar:v1
+<ul>
+<li> Start kubernetes on kub
+ <ul>
+  <li> ssh in: 'vagrant ssh kub'
+  <li> copy scripts/startkub.sh to the home directory on 'kub'
+  <li> install docker
+  <ul>
+   <li>sudo apt-get update
+   <li>sudo apt-get wget
+   <li>wget -O getdocker.sh get.docker.com
+   <li>run getdocker.sh: 'sudo ./getdocker.sh'
+   <li>test success: 'sudo docker ps'
+  </ul>
+  <li>start kubernetes: 'sudo ./startkub.sh'
+   <li> get kubectl
+   <ul>
+    <li>'wget https://storage.googleapis.com/kubernetes-release/release/v1.0.1/bin/linux/amd64/kubectl'
+    <li>'chmod +x kubectl'
+   </ul>
+   <li>test kubernetes: './kubectl get pods'  (should get just kubernetes itself)
+   <li>get image: sudo docker pull dfilppi/nodecellar:v1
+ </ul>
+</ul>
 
 - Install cfy on mongo
  - ssh in: 'vagrant ssh mongo'
