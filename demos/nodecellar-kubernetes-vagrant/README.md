@@ -71,3 +71,6 @@ Demonstrates a hybrid deployment on Vagrant using the simple manager and Kuberne
   <li>run 'cfy local execute -w install'
  </ul>
 </ul>
+
+# Finish line
+The demo should be available on http://192.168.33.10:3000
