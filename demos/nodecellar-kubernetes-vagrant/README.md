@@ -4,20 +4,20 @@ Demonstrates a hybrid deployment on Vagrant using the simple manager and Kuberne
 
 Requirements:
 
-* Vagrant: two VM config, one to host Kubernetes and nodejs, the other the Cloudify CLI and Mongodb
-* Access to docker image on DockerHub for nodejs.  __DEMO REQUIRES INTERNET ACCESS__ (at least on the first run)
-* A machine with at least 5GB free to launch the machines
-* A machine with Virtualbox >= 4.3
-* A machine with Vagrant >= 1.6.3
+- Vagrant: two VM config, one to host Kubernetes and nodejs, the other the Cloudify CLI and Mongodb
+- Access to docker image on DockerHub for nodejs.  __DEMO REQUIRES INTERNET ACCESS__ (at least on the first run)
+- A machine with at least 5GB free to launch the machines
+- A machine with Virtualbox >= 4.3
+- A machine with Vagrant >= 1.6.3
 
 Instructions:
 
-+ Using the Vagrantfile in scripts/, bootstrap the environment
+- Using the Vagrantfile in scripts/, bootstrap the environment
  - copy Vagrant file to an empty directory
  - from the directory execute: "vagrant up"
  - result:  two VMs, one named 'kub' and one named 'mongo'
 
-+ Start kubernetes on kub
+- Start kubernetes on kub
  - ssh in: 'vagrant ssh kub'
  - copy scripts/startkub.sh to the home directory on 'kub'
  - install docker
@@ -33,7 +33,7 @@ Instructions:
  - test kubernetes: './kubectl get pods'  (should get just kubernetes itself)
  - get image: sudo docker pull dfilppi/nodecellar:v1
 
-+ Install cfy on mongo
+- Install cfy on mongo
  - ssh in: 'vagrant ssh mongo'
  - install cfy cli
   - sudo apt-get update
@@ -44,7 +44,7 @@ Instructions:
   - pip install cloudify
   - test success: 'cfy --version'
 
-+ Run the blueprint
+- Run the blueprint
  - copy the contents of mongohome/ to the /home/vagrant dir on mongo
  - cd to cfy3/mongo
  - run 'cfy local install-plugins -p local-blueprint.yaml'
