@@ -1,6 +1,6 @@
 ## Description:
 
-Demonstrates a hybrid deployment on Vagrant using the simple manager and Kubernetes.  Result is the usual nodecellar demo.
+Demonstrates a hybrid local mode deployment on Vagrant using the simple manager and Kubernetes.  Result is the usual nodecellar demo.
 
 ## Requirements:
 
@@ -64,16 +64,36 @@ Demonstrates a hybrid deployment on Vagrant using the simple manager and Kuberne
  </ul>
 </ul>
 
+<br>
+There are two ways to run the demo: with the Kuberenetes nodes defined in the same blueprint as MongoDb, and with the Kuberenetes nodes defined in a separate blueprint from the mongo node.  The first has a more 'hybrid cloud' flavor, where the second is probably more useful in a 'microservices' context.
+
+<b>Kubernetes and Mongo in the same blueprint</b>
 <ul>
 <li>Run the blueprint
  <ul>
   <li>copy the contents of mongohome/ to the /home/vagrant dir on mongo
   <li>cd to cfy3/mongo
-  <li>run `cfy local install-plugins -p local-blueprint.yaml`
-  <li>run `cfy local init -p local-blueprint.yaml`
+  <li>run `cfy local install-plugins -p local-with-kub.yaml`
+  <li>run `cfy local init -p local-with-kub.yaml`
   <li>run `cfy local execute -w install`
  </ul>
 </ul>
 
+<b>Kubernetes and Mongo in the separate blueprints</b>
+<ul>
+<li>Run the blueprints
+ <ul>
+  <li>copy the contents of mongohome/ to the /home/vagrant dir on mongo
+  <li>cd to cfy3/mongo
+  <li>run `cfy local install-plugins -p local-with-kub.yaml`
+  <li>run `cfy local init -p local-simple.yaml`
+  <li>run `cfy local execute -w install`.  This will start mongodb
+  <li>create a subdir (tmp for example).  cd to tmp.
+  <li>run `cp ../local-kub-node.yaml .`
+  <li>run `cfy local init -p local-kub-node.yaml`
+  <li>run `cfy local execute -w install`.  This will start the microservice on Kuberenetes.
+ </ul>
+</ul>
+
 ## Finish line
-The demo should be available on http://192.168.33.10:3000
+The demo is be available on http://192.168.33.10:3000
