@@ -22,7 +22,9 @@ node_types:
       ssh_port:
         description: ssh port.  defaults to 22
         default: 22
-      
+      host_ip:
+        description: host ip
+        default: ''
 
   cloudify.kubernetes.master:
     derived_from: cloudify.kubernetes.base
