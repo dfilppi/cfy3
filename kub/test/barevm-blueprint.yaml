@@ -8,14 +8,14 @@ imports:
 node_templates:
 
   master:
-    type: cloudify.kubernetes.master
+    type: cloudify.kubernetes.Master
     properties:
       ip: 10.67.79.129
       ssh_username: ubuntu
       ssh_keyfilename: /home/ubuntu/dfilppi-kp.pem
 
   minion:
-    type: cloudify.kubernetes.node
+    type: cloudify.kubernetes.Node
     properties:
       ip: 10.67.79.130
       ssh_username: ubuntu
