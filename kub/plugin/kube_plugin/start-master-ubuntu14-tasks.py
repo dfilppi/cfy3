@@ -51,7 +51,7 @@ def start_master():
   flannel=";".join(flannel.split())
 
   # edit docker config
-  script=os.path.abspath("kube_plugin/edit_docker_config")
+  script=os.path.abspath("kube_plugin/edit_docker_config.py")
   put(script,"/tmp/edit_docker_config.py")
   sudo("python /tmp/edit_docker_config.py '{}'".format(flannel),shell=True)
   
