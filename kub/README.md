@@ -24,10 +24,37 @@ Represents a Kubernetes "node" or "minion".  Unused if simply connecting to an e
 
 #### cloudify.kubernetes.MicroService type
 
-Represents a "microservice" in a Kubernetes cluster.  Requires the [`cloudify.kubernetes.relationships.connected_to_master`](#conn-to-master) relationship to get connection information.  Can define a service by plugin properties, by embedded Kubernetes native YAML, and by referring to a standard Kubernetes YAML deployment manifest while permitting overrides.  Actual command execution on Kubernetes is performed by the [fabric plugin](https://github.com/cloudify-cosmo/cloudify-fabric-plugin) by remotely executing the Kubernetes `kubectl` executable on the master node.
+Represents a "microservice" in a Kubernetes cluster.  Requires the [`cloudify.kubernetes.relationships.connected_to_master`](#conn-to-master) relationship to get connection information.  Can define a service by plugin properties, by embedded Kubernetes native YAML, and by referring to a standard Kubernetes YAML deployment manifest while permitting overrides.  When using either form of native YAML, the actual Kubernetes action performed is determined by the configuration, which means that in reality it may or may not actually create a Kubernetes service, replication control, or other artifact.  Actual command execution on Kubernetes is performed by the [fabric plugin](https://github.com/cloudify-cosmo/cloudify-fabric-plugin) by remotely executing the Kubernetes `kubectl` executable on the master node.
 
 <b>Interesting properties</b>
-TBD
+<li> non-native service definition - uses kubectl on master to first run a "run" command, followed by an "expose" command.
+
+ Property        | Description                                   
+ --------------- |  ---------------------
+ name            | service name                                  
+ image           | image name                                    
+ port            | service listening port                        
+ target_port     | container port (default:port)                 
+ protocol        | TCP/UDP  (default TCP)                        
+ replicas        | number of replicas (default 1)                   
+ run_overrides   | json overrides for kubectl "run"              
+ expose_overrides| json overrides for kubectl "expose"          
+
+<nbsp>
+<li>native embedded properties
+
+ Property        | Description                                 
+ --------------- | ---------------------------------------------
+ config          | indented children are native Kubernetes YAML
+
+<nbsp>
+<li>native file reference properties
+
+ Property        | Description                                
+ --------------- | ---------------------------------------------
+ config_path     | path to Kubernetes manifest               
+ config_overrides| replacement values for external manifest 
+
 
 #### cloudify.kubernetes.relationships.connected_to_master relationship <a id="#conn-to-master"></a>
 
