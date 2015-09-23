@@ -59,11 +59,6 @@ node_types:
   ##########################################
   cloudify.kubernetes.Node:
     derived_from: cloudify.kubernetes.Base
-    properties:
-      master_ip:
-        default: ''
-      master_port:
-        default: 0
     interfaces:
       cloudify.interfaces.lifecycle:
         start:
