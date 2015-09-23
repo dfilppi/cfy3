@@ -2,6 +2,10 @@
 
 This project contains a plugin that enables Cloudify to install, configure, and run services on a Kubernetes cluster.  The current plugin has only been testing cfy local mode, and uses the [fabric plugin](https://github.com/cloudify-cosmo/cloudify-fabric-plugin) to perform the installation and configuration of Kubernetes.
 
+Limitations (as of 9/23/15):
++ Only tested on Ubuntu 14
++ Only tested in local mode
+
 ### Plugin components
 
 #### cloudify.kubernetes.Master node type
