@@ -25,7 +25,7 @@ Represents a "microservice" in a Kubernetes cluster.  Requires the [`cloudify.ku
 <b>Interesting properties</b>
 TBD
 
-#### cloudify.kubernetes.relationships.connected_to_master relationship (#conn-to-master)
+#### cloudify.kubernetes.relationships.connected_to_master relationship <a id="#conn-to-master"></a>
 
 Just retrieves the master ip and port for use by the dependent node.
 
