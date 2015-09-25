@@ -61,5 +61,13 @@ Represents a "microservice" in a Kubernetes cluster.  Requires the [`cloudify.ku
 Just retrieves the master ip and port for use by the dependent node.
 
 #### Workflows
-TBD
 
+These workflows just delegate to `kubectl` on the master.  They all share a parameter called `master`.  The `master` parameter is set to the node name of the Kubernetes master that the workflow is to be run against.  Another pattern is to provide many (but not all) of the parameters that `kubectl` accepts, but using the `overrides` property as a catch all.
+These workflows are provided as samples.  It should be understood that any actual producion blueprint would only implement workflows relevant to the blueprint purpose, which may or may not include the following, and probably contain others.
+
+Workflow name| Description
+------ | -------
+kube_run         | `kubectl run` equivalent
+kube_expose      | `kubectl run` equivalent
+kube_stop        | `kubectl stop` equivalent
+kube_delete      | `kubectl delete` equivalent
