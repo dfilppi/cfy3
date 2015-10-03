@@ -1,0 +1,6 @@
+import configobj
+
+
+c=configobj.ConfigObj("diamond.conf")
+
+print c['handlers']
