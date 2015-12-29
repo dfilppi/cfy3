@@ -8,7 +8,7 @@ tosca_definitions_version: cloudify_dsl_1_0
 imports:  
   - http://www.getcloudify.org/spec/cloudify/3.1/types.yaml
   - http://www.getcloudify.org/spec/diamond-plugin/1.1/plugin.yaml
-  - plugins/wf_plugin/plugin.yaml
+  - plugins/resumable_plugin/plugin.yaml
   - types/mongotypes.yaml
 
 ###########################################################
@@ -32,11 +32,6 @@ inputs:
         Path to a private key that resided on the management machine.
         SSH-ing into agent machines will be done with this key.
 
-workflows:
-  my_install:
-    mapping: wf_plugin.workflows.install
-    parameters: {}
-
 node_templates:
 
   ###########################################################
@@ -52,42 +47,6 @@ node_templates:
       cloudify_agent:
         user: { get_input: agent_user }
         key: { get_input: agent_private_key_path }
-#    interfaces:
-
-      ###########################################################
-      # We are infact telling cloudify to install a diamond
-      # monitoring agent on the server.
-      #
-      # (see https://github.com/BrightcoveOS/Diamond)
-      ###########################################################
-
-#      cloudify.interfaces.monitoring_agent:
-#          install:
-#            implementation: diamond.diamond_agent.tasks.install
-#            inputs:
-#              diamond_config:
-#                interval: 1
-#          start: diamond.diamond_agent.tasks.start
-#          stop: diamond.diamond_agent.tasks.stop
-#          uninstall: diamond.diamond_agent.tasks.uninstall
-
-      ###########################################################
-      # Adding some collectors. These collectors are necessary
-      # for the Cloudify UI to display the deafult metrics.
-      ###########################################################
-
-#      cloudify.interfaces.monitoring:
-#          start:
-#            implementation: diamond.diamond_agent.tasks.add_collectors
-#            inputs:
-#              collectors_config:
-#                CPUCollector: {}
-#                MemoryCollector: {}
-#                LoadAverageCollector: {}
-#                DiskUsageCollector:
-#                  config:
-#                    devices: x?vd[a-z]+[0-9]*$
-#                NetworkCollector: {}
 
 
   # This node will wait for all others to start so it can

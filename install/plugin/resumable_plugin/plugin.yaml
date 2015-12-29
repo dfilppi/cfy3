@@ -1,0 +1,12 @@
+plugins:
+  resumable_plugin:
+    executor: central_deployment_agent
+    source: resumabe_plugin
+
+workflows:
+  resumable_install:
+    mapping: resumable_plugin.workflows.workflows33.install
+    parameters: 
+      resume:
+        description: if true, will resume a previous failed install
+        default: false

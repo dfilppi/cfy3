@@ -9,9 +9,9 @@ setup(
     name='workflows',
 
     version='0.1',
-    author='ENTER-AUTHOR-HERE',
-    author_email='ENTER-AUTHOR-EMAIL-HERE',
-    description='ENTER-DESCRIPTION-HERE',
+    author='dfilppi',
+    author_email='dewayne@gigaspaces.com',
+    description='resumable install workflow',
 
     # This must correspond to the actual packages in the plugin.
     packages=['workflows'],
@@ -20,10 +20,10 @@ setup(
     zip_safe=False,
     install_requires=[
         # Necessary dependency for developing plugins, do not remove!
-        "cloudify-plugins-common>=3.2"
+        "cloudify-plugins-common>=3.3"
     ],
     test_requires=[
-        "cloudify-dsl-parser>=3.2"
+        "cloudify-dsl-parser>=3.3"
         "nose"
     ]
 )

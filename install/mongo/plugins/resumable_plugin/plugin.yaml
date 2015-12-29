@@ -1,11 +1,11 @@
 plugins:
-  wf_plugin:
+  resumable_plugin:
     executor: central_deployment_agent
-    source: wf_plugin
+    source: resumable_plugin
 
 workflows:
-  my_install:
-    mapping: wf_plugin.workflows.workflows.install
+  resumable_install:
+    mapping: wf_plugin.workflows.workflows33.install
     parameters: 
       resume:
         description: if true, will resume a previous failed install
