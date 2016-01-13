@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nodecellar
+spec:
+  restartPolicy: Never
+  containers:
+  - name: nodecellar
+    image: dfilppi/nodecellar:v1
+    workingDir: /root/nodecellar-master
+    command: ["../node/bin/node","server.js"]
+    ports:
+    - containerPort: 3000
+      hostPort: 3000
+      hostIP: 0.0.0.0
+    env:
+    - name: MONGO_HOST
+      value: '10.10.10.10'
+    - name: MONGO_PORT
+      value: '8999'

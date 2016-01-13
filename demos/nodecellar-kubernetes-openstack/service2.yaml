@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodecellar-service
+spec:
+  selector:
+    app: nodecellar
+  ports:
+    - protocol: TCP
+      port: 8888
+      targetPort: 3000
+      nodePort: 30000
+  type: NodePort
+  
