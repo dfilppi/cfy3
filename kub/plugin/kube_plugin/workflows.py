@@ -1,8 +1,54 @@
 from cloudify.decorators import workflow
 from cloudify.workflows import ctx
+from cloudify import manager
 import re
-from fabric.api import run,env
+import os
+from fabric.api import run,env,put
 
+
+#
+# Scale a replication controller
+#
+@workflow
+def kube_scale(**kwargs):
+  setfabenv(kwargs)
+
+  #get resource name
+  nodename=kwargs['name']
+  node=ctx.get_node(nodename)
+  name=node.properties['name']
+  amount=0
+
+  #if the request is an increment, get current value
+  if(kwargs['amount'][0]=='+' or kwargs['amount'][0]=='-'):
+    output=run("./kubectl -s http://localhost:8080 get rc --no-headers {}".format(name))
+    curinstances=int(output.stdout.split()[4])
+    inc=int(kwargs['amount'])
+    amount=curinstances+inc
+  else:
+    amount=int(kwargs['amount'])
+
+  run("./kubectl -s http://localhost:8080 scale --replicas={} rc {}".format(amount,name))
+
+#
+# Run an image on the cluster pointed to by the master arg
+#
+@workflow
+def kube_create(**kwargs):
+  setfabenv(kwargs)
+  url=kwargs['url']
+  #get manifest
+  if(url[0:4]=='http'):
+    #external
+    run("wget -O /tmp/manifest.yaml "+url)
+  else:
+    #in blueprint dir
+
+    res=manager.download_blueprint_resource(ctx.blueprint.id,url,ctx.logger)
+    
+    put(res,"/tmp/manifest.yaml")
+
+  run("./kubectl -s http://localhost:8080 create -f /tmp/manifest.yaml")
 
 #
 # Run an image on the cluster pointed to by the master arg
@@ -56,15 +102,23 @@ def kube_delete(**kwargs):
 # Construct the fabric environment from the supplied master
 # node in kwargs
 def setfabenv(kwargs):
+  fabenv={}
   master=get_ip(kwargs['master'])
   masternode=ctx.get_node(kwargs['master'])
-  url='http://'+master
-  fabenv={}
-  fabenv['user']=masternode.properties['ssh_username']
-  fabenv['password']=masternode.properties['ssh_password']
-  fabenv['key_filename']=masternode.properties['ssh_keyfilename']
-  fabenv['host_string']=masternode.properties['ssh_username']+'@'+masternode.properties['ip']
-  fabenv['port']=masternode.properties['ssh_port']
+  if(masternode.type=='cloudify.nodes.DeploymentProxy'):
+    #grab proper ip, assumes relationship has copied properties to instance
+    fabenv['host_string']=kwargs['ssh_user']+'@'+master
+    fabenv['port']=kwargs.get('ssh_port','22')
+    fabenv['user']=kwargs['ssh_user']
+    fabenv['key_filename']=kwargs['ssh_keyfilename']
+  else:
+    #requires ssh info be defined on master node
+    masternode=ctx.get_node(kwargs['master'])
+    fabenv['host_string']=masternode.properties['ssh_user']+'@'+masternode.properties['ip']
+    fabenv['port']=masternode.properties['ssh_port']
+    fabenv['user']=masternode.properties['ssh_user']
+    fabenv['password']=masternode.properties['ssh_password']
+    fabenv['key_filename']=masternode.properties['ssh_keyfilename']
   env.update(fabenv)
 
 # utility class to process options in the form
@@ -84,6 +138,7 @@ class Option(object):
     return "--"+(self._option_name or self._arg)+"="+str(self._val)
 
 def buildopts(kwargs,namedict={},conddict={},flags=[],ignore=[]):
+  ignore=ignore+['ssh_user','ssh_keyfilename']
   outstr=''
   for k,v in kwargs.iteritems():
     if(k.startswith('_') or k=='ctx' or k in ignore):
@@ -104,8 +159,15 @@ def buildopts(kwargs,namedict={},conddict={},flags=[],ignore=[]):
 
 
 def get_ip(master):
+  node=ctx.get_node(master)
   if(ctx.local):
     return ctx.get_node(master).properties['ip']
   else:
-    raise('not implemented')  # need to get default instance in cloud case
-
+    # use default instance ([0])
+    instance=node.instances.next()._node_instance
+    if(node.type=='cloudify.nodes.DeploymentProxy'):
+      r=re.match('.*://(.*):(.*)',instance.runtime_properties['kubernetes_info']['url'])
+        f.write("  ip="+r.group(1))
+      return(r.group(1))
+    else:
+      return(instance.runtime_properties['ip'])

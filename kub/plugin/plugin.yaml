@@ -1,19 +1,20 @@
 plugins:
   kubernetes:
+# if using in agent mode, set executor to host_agent
+#    executor: host_agent
     executor: central_deployment_agent
-    source: /home/vagrant/cfy3/mongo/plugins/kubernetes
+    source: kubernetes
 
 node_types:
   cloudify.kubernetes.Base:
-    derived_from: cloudify.nodes.Compute
+    derived_from: cloudify.nodes.Root
     properties:
-      install_agent:
-        default: false
       ssh_keyfilename:
         description: file name that holds ssh key for passwordless operation
         default: ''
       ssh_username:
         description: ssh user
+        default: ''
       ssh_password:
         description: ssh password when not using passwordless operation
         default: ''
@@ -26,8 +27,8 @@ node_types:
       install:
         description: install kubernetes
         default: true
+     
       
-
   ##########################################
   # Represents a master/node
   ##########################################
@@ -40,19 +41,7 @@ node_types:
         default: 8080
     interfaces:
       cloudify.interfaces.lifecycle:
-        start:
-          implementation: fabric.fabric_plugin.tasks.run_module_task
-          inputs: 
-            task_mapping:
-              default: kube_plugin.start-master-ubuntu14-tasks.start_master
-            fabric_env:
-              default:
-                user: { get_property: [SELF,ssh_username]}
-                password: { get_property: [SELF,ssh_password]}
-                key_filename: { get_property: [SELF,ssh_keyfilename]}
-                host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, ip] }] }
-                port: { get_property: [SELF,ssh_port]}
-                connection_attempts: 20
+        start: kubernetes.kube_plugin.start-master-ubuntu14.start_master
 
   ##########################################
   # Represents a minion/node
@@ -61,33 +50,16 @@ node_types:
     derived_from: cloudify.kubernetes.Base
     interfaces:
       cloudify.interfaces.lifecycle:
-        start:
-          implementation: fabric.fabric_plugin.tasks.run_module_task
-          inputs: 
-            task_mapping:
-              default: kube_plugin.start-node-ubuntu14-tasks.start_node
-            task_name:
-              default: start_node
-            fabric_env:
-              default:
-                user: { get_property: [SELF,ssh_username]}
-                password: { get_property: [SELF,ssh_password]}
-                key_filename: { get_property: [SELF,ssh_keyfilename]}
-                host_string: { concat: [ {get_property: [ SELF, ssh_username]},'@',{ get_property: [SELF, ip] }] }
-                port: { get_property: [SELF,ssh_port]}
-                connection_attempts: 20
+        start: kubernetes.kube_plugin.start-node-ubuntu14.start_node
     
   ##########################################
   # Represents a kubernetes service
   ##########################################
   cloudify.kubernetes.Microservice:
-    derived_from: cloudify.nodes.Container
+    derived_from: cloudify.kubernetes.Base
     properties:
-      install_agent:
-        default: false
       name:
         description: the name of the service
-        default: ''
       image:
         description: the image to run
         default: ''
@@ -112,16 +84,17 @@ node_types:
       config:
         description: key/values in kubernetes format. if config_path also defined, merge these values with file contents
         default: {}
-      config_path:
-        description: external kubernetes manifest for service
-        default: ''
-      config_overrides:
-        description: overrides in python format for config_path settings
-        default: ''
+      config_files:
+        description: external kubernetes manifest(s) for service. each element has "file" and optional "overrides" entries
+        default: []
     interfaces:
       cloudify.interfaces.lifecycle:
         start:
-          implementation: kubernetes.kube_plugin.tasks.kube_run_expose
+          #implementation: kubernetes.kube_plugin.tasks.kube_run_expose
+          implementation: kubernetes.kube_plugin.remote-tasks.kube_run_expose
+        stop:
+          #no non-remote implementation yet
+          implementation: kubernetes.kube_plugin.remote-tasks.kube_delete
 
 
 relationships:
@@ -130,9 +103,54 @@ relationships:
     source_interfaces:
       cloudify.interfaces.relationship_lifecycle:
         postconfigure:
-          implementation: kubernetes.kube_plugin.tasks.connect_master
+          implementation: kubernetes.kube_plugin.remote-tasks.connect_master
 
+  cloudify.kubernetes.relationships.contained_in_host:
+    derived_from: cloudify.relationships.contained_in
+    source_interfaces:
+      cloudify.interfaces.relationship_lifecycle:
+        postconfigure:
+          implementation: kubernetes.kube_plugin.tasks.contained_in
+
+  cloudify.kubernetes.relationships.copy_rtprops:
+    derived_from: cloudify.relationships.connected_to
+    source_interfaces:
+      cloudify.interfaces.relationship_lifecycle:
+        postconfigure:
+          implementation: kubernetes.kube_plugin.tasks.copy_rtprops
+    properties:
+      prop_list:
+        default: ""
+            
 workflows:
+
+  kube_scale:
+    mapping: kubernetes.kube_plugin.workflows.kube_scale
+    parameters:
+      master:
+        description: name of master node or proxy
+      ssh_user:
+        description: ssh user used to run kubectl on master
+      ssh_keyfilename:
+        description: private key for ssh
+      name:
+        description: microservice node name
+      amount:
+        description: value or increment ( e.g. "2" or "+1" "-1")
+        default: "+0"
+
+  kube_create:
+    mapping: kubernetes.kube_plugin.workflows.kube_create
+    parameters:
+      master:
+        description: name of master node or proxy
+      url:
+        description: url or blueprint relative path of kubernetes manifest
+      ssh_user:
+        description: ssh user used to run kubectl on master
+      ssh_keyfilename:
+        description: private key for ssh
+
   kube_run:
     mapping: kubernetes.kube_plugin.workflows.kube_run
     parameters:
@@ -151,6 +169,10 @@ workflows:
       dry_run:
         description: don't actually do anything
         default: False
+      ssh_user:
+        description: ssh user used to run kubectl on master
+      ssh_keyfilename:
+        description: private key for ssh
       overrides:
         description: json overrides
         default: ''
@@ -175,6 +197,10 @@ workflows:
       service_name:
         description: name of the newly created object
         default: ''
+      ssh_user:
+        description: ssh user used to run kubectl on master
+      ssh_keyfilename:
+        description: private key for ssh
       overrides:
         description: json overrides
         default: ''
@@ -188,6 +214,10 @@ workflows:
         description: name of the resource to stop
       resource:
         description: type of the resource to be stopped
+      ssh_user:
+        description: ssh user used to run kubectl on master
+      ssh_keyfilename:
+        description: private key for ssh
       all:
         description: stop all
         default: False
@@ -201,6 +231,10 @@ workflows:
         description: name of the resource to delete
       resource:
         description: type of the resource to be deleted
+      ssh_user:
+        description: ssh user used to run kubectl on master
+      ssh_keyfilename:
+        description: private key for ssh
       all:
         description: stop all
         default: False
