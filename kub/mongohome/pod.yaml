@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: nodecellar
+spec:
+  replicas: 1
+  selector:
+    app: nodecellar
+  template:
+    metadata:
+      name: nodecellar
+      labels:
+        app: nodecellar
+    spec:
+      containers:
+      - name: nodecellar
+        image: dfilppi/nodecellar:v2
+        workingDir: /
+        command: ["bash","start.sh"]
+        ports:
+        - containerPort: 3000
+          hostPort: 3000
+          hostIP: 0.0.0.0
+        env:
+        - name: NODECELLAR_PORT
+          value: '3000'
+        - name: MONGO_HOST
+          value: '15.125.81.204'
+        - name: MONGO_PORT
+          value: '27400'
+      - name: diamondd
+        image: dfilppi/diamond:v1
+        workingDir: /
+        command: ["bash","start.sh"]
+        ports:
+        - containerPort: 5672
+          hostPort: 5672
+          hostIP: '0.0.0.0'
+        env:
+        - name: CH_SERVER
+          value: '10.67.79.2'
+        - name: CC_PORT
+          value: '3000'
+        - name: CC_DEPLOYMENT
+          value: ''
+        - name: CC_NODE
+          value: ''
+        - name: CC_INSTANCE
+          value: ''

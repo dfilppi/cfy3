@@ -1,0 +1,130 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on prestarted Kubernetes cluster and mongodb on Openstack.
+# The proxy pattern is used to connect the deployment
+# running Kubernetes with the service deployment
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_2
+
+imports:  
+  - http://getcloudify.org/spec/cloudify/3.3.1/types.yaml
+  - http://getcloudify.org/spec/openstack-plugin/1.3.1/plugin.yaml
+  - http://www.getcloudify.org/spec/fabric-plugin/1.3.1/plugin.yaml
+  - plugins/cloudify-proxy-plugin/plugin.yaml
+  - types/mongotypes.yaml
+  - plugins/kubernetes/plugin-remote.yaml
+
+inputs:
+
+  kub_deployment:
+    description: >
+      The Kubernetes deployment id
+
+  mongo_deployment:
+    description: >
+      The MongoDb deployment id
+
+node_templates:
+
+  kubernetes_proxy:
+    type: cloudify.nodes.DeploymentProxy
+    properties:
+      inherit_outputs:
+        - 'kubernetes_info'
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          inputs:
+            deployment_id: { get_input: kub_deployment }
+        start:
+          inputs:
+            deployment_id: { get_input: kub_deployment }
+        stop:
+          inputs:
+            deployment_id: { get_input: kub_deployment }
+
+  mongo_proxy:
+    type: cloudify.nodes.DeploymentProxy
+    properties:
+      inherit_outputs:
+        - 'mongo_info'
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          inputs:
+            deployment_id: { get_input: mongo_deployment }
+        start:
+          inputs:
+            deployment_id: { get_input: mongo_deployment }
+        stop:
+          inputs:
+            deployment_id: { get_input: mongo_deployment }
+
+  nodecellar:
+    type: cloudify.kubernetes.Microservice
+    properties:
+      name: nodecellar
+      ssh_username: ubuntu
+      ssh_keyfilename: /root/.ssh/agent_key.pem
+      config_files:
+        - file: pod.yaml
+          overrides:
+            - "['spec']['template']['spec']['containers'][0]['env'][1]['value'] = '@{mongo_proxy,mongo_info,ip}'"
+            - "['spec']['template']['spec']['containers'][0]['env'][2]['value'] = '@{mongo_proxy,mongo_info,port}'"
+            - "['spec']['template']['spec']['containers'][1]['env'][0]['value'] = '%{management_ip}'"
+            - "['spec']['template']['spec']['containers'][1]['env'][2]['value'] = '%{deployment.id}'"
+            - "['spec']['template']['spec']['containers'][1]['env'][3]['value'] = '%{node.id}'"
+            - "['spec']['template']['spec']['containers'][1]['env'][4]['value'] = '%{instance.id}'"
+        - file: service2.yaml
+          
+    relationships:
+      - type: cloudify.kubernetes.relationships.connected_to_master
+        target: kubernetes_proxy
+      - type: cloudify.relationships.connected_to_proxy
+        target: mongo_proxy
+
+policy_types:
+  scale_policy_type:
+    source: scale.clj
+    properties:
+      service_selector:
+        description: regular expression that selects the metric to be measured
+        default: ".*"
+      moving_window_size:
+        description: the moving window for individual sources in secs
+        default: 10
+      scale_threshold:
+        description: the value to trigger scaling over aggregrated moving values
+      scale_limit:
+        description: scaling limit
+        default: 10
+      scale_direction:
+        description: scale up (<) or scale down (>)
+        default: <
+      cooldown_time:
+        description: the time to wait before evaluating again after a scale
+        default: 30
+
+groups:
+  group1:
+    members: [nodecellar]
+    policies:
+      test_policy:
+        type: scale_policy_type
+        properties:
+          moving_window_size: 10
+          scale_threshold: 10
+          cooldown_time: 60
+          service_selector: ".*connections$"
+        triggers:
+          execute_scale_workflow:
+            type: cloudify.policies.triggers.execute_workflow
+            parameters:
+              workflow: kube_scale
+              workflow_parameters:
+                master: kubernetes_proxy
+                ssh_user: ubuntu
+                ssh_keyfilename: /root/.ssh/agent_key.pem
+                name: nodecellar
+                amount: '+1'

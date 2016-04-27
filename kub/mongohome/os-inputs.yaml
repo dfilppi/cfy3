@@ -1,0 +1,10 @@
+image: 6c3047c6-17b1-4aaf-a657-9229bb481e50
+
+# 2GB
+flavor: 05a9e6d1-d29f-4e98-9eab-51c9a6beed44
+
+# 4GB
+#flavor: 196235bc-7ca5-4085-ac81-7e0242bda3f9
+agent_user: ubuntu
+#kub_deployment: kd
+#mongo_deployment: md

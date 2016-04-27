@@ -1,0 +1,70 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on an existing host.
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_1
+
+imports:  
+  - http://www.getcloudify.org/spec/cloudify/3.1/types.yaml
+  - http://www.getcloudify.org/spec/fabric-plugin/1.2.1/plugin.yaml
+  - ../plugins/kubernetes/plugin.yaml
+
+###########################################################
+# Inputs section allows the user to use same
+# blueprint several times, with different paramters for
+# each time.
+###########################################################
+
+inputs:
+  kub_ip:
+      default: 192.168.33.10
+  db_ip:
+      default: 192.168.33.11
+  db_port:
+      default: 27400
+
+node_templates:
+
+  master:
+    type: cloudify.kubernetes.Master
+    properties:
+      ip: { get_input: kub_ip}
+      ssh_username: vagrant
+      ssh_keyfilename: /vagrant/insecure_private_key
+      install: False  #just connect
+
+  nodecellar:
+    type: cloudify.kubernetes.Microservice
+    properties:
+#      config:
+#        apiVersion: v1
+#        kind: Pod
+#        metadata:
+#          name: nodecellar
+#        spec:
+#          restartPolicy: Never
+#          containers:
+#          - name: nodecellar
+#            image: dfilppi/nodecellar:v1
+#            workingDir: /root/nodecellar-master
+#            command: ["../node/bin/node","server.js"]
+#            ports:
+#            - containerPort: 3000
+#              hostPort: 3000
+#            hostIP: { get_property: [ master, ip]}
+#            env:
+#            - name: MONGO_HOST
+#              value: { get_input: host_ip }
+#            - name: MONGO_PORT
+#              value: { concat: ["", { get_property: [ mongod1 , port ]}] }
+      config_path: service.yaml
+      config_overrides:
+        - { concat: ["['spec']['containers'][0]['ports'][0]['hostIP']=","'",{ get_property: [ master, ip]},"'"] }
+        - { concat: ["['spec']['containers'][0]['env'][0]['value']=","'",{ get_input: db_ip},"'"] }
+        - { concat: ["['spec']['containers'][0]['env'][1]['value']=","'",{ get_input: db_port},"'"] }
+    relationships:
+      - type: cloudify.kubernetes.relationships.connected_to_master
+        target: master
+
+

@@ -1,0 +1,72 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on an existing host.
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_2
+
+imports:  
+  - http://getcloudify.org/spec/cloudify/3.3.1/types.yaml
+  - http://getcloudify.org/spec/diamond-plugin/1.3.1/plugin.yaml
+  - http://getcloudify.org/spec/openstack-plugin/1.3.1/plugin.yaml
+  - types/mongotypes.yaml
+  - plugins/kubernetes/plugin.yaml
+
+inputs:
+
+  image:
+    description: >
+      Image to be used when launching agent VM's
+
+  flavor:
+    description: >
+      Flavor of the agent VM's
+
+  agent_user:
+    description: >
+      User for connecting to agent VM's
+
+node_templates:
+
+  mongod_host:
+    type:  cloudify.openstack.nodes.Server
+    properties:
+      cloudify_agent:
+        user: ubuntu
+      image: {get_input: image}
+      flavor: {get_input: flavor}
+    relationships:
+      - target: mongod_security_group
+        type: cloudify.openstack.server_connected_to_security_group
+
+  mongod_security_group:
+    type: cloudify.openstack.nodes.SecurityGroup
+    properties:
+      security_group:
+        name: mongod_security_group
+        description: mongod security group
+      rules:
+        - remote_ip_prefix: 0.0.0.0/0
+          port: { get_property: [ mongod, port ] }
+
+  mongod:
+    type: nodecellar.nodes.Mongod
+    instances:
+      deploy: 1
+    properties:
+      port: 27400
+      rsetname: ''  #no replicas 
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: mongod_host
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure: scripts/mongo/install-pymongo.sh
+
+outputs:
+  mongo_info:
+    description: Nodecellar connection info
+    value:
+#      ip: {get_attribute: [ mongod_floatingip, floating_ip_address ]}
+      ip: {get_attribute: [ mongod_host, ip ]}
+      port: {get_property: [ mongod, port ]}

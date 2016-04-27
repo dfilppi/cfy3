@@ -1,0 +1,74 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on an existing host.
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_1
+
+imports:  
+  - http://www.getcloudify.org/spec/cloudify/3.1/types.yaml
+  - http://www.getcloudify.org/spec/fabric-plugin/1.2.1/plugin.yaml
+  - types/mongotypes.yaml
+  - plugins/kubernetes/plugin.yaml
+
+###########################################################
+# Inputs section allows the user to use same
+# blueprint several times, with different paramters for
+# each time.
+###########################################################
+
+inputs:
+
+  host_ip:
+      description: >
+        The ip of the host the application will be deployed on
+      default: 192.168.33.11
+
+node_templates:
+
+  ###########################################################
+  # We define a type that inherits cloudify's default
+  # compute node, and adds monitoring capabillities
+  # on top of it.
+  ###########################################################
+
+  host:
+    type: cloudify.nodes.Compute
+    properties:
+      ip: { get_input: host_ip }
+      install_agent: false
+
+  # This node will wait for all others to start so it can
+  # publish outputs for other blueprints
+  joiner:
+    type: cloudify.nodes.Root
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start: scripts/mongo/set-joiner-outputs.py
+    relationships:
+      - type: joiner_connected_to_mongod
+        target: mongod1
+      - type: cloudify.relationships.contained_in
+        target: host
+
+  # MONGOD - for singlenode, explicitly run 2, for cloud
+  # can use instances
+  mongod1:
+    type: nodecellar.nodes.Mongod
+    instances:
+      deploy: 1
+    properties:
+      port: 27400
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure: scripts/mongo/install-pymongo.sh
+
+outputs:
+  cluster_info:
+    description: Mongo cluster info
+    value:
+      dbhost: { get_input: host_ip }
+      dbport: { get_property: [ mongod1,port]}

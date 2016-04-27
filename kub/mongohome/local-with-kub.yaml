@@ -1,0 +1,113 @@
+###########################################################
+# This Blueprint installs the nodecellar application
+# on an existing host.
+###########################################################
+
+tosca_definitions_version: cloudify_dsl_1_1
+
+imports:  
+  - http://www.getcloudify.org/spec/cloudify/3.1/types.yaml
+  - http://www.getcloudify.org/spec/fabric-plugin/1.2.1/plugin.yaml
+  - types/mongotypes.yaml
+  - plugins/kubernetes/plugin.yaml
+
+###########################################################
+# Inputs section allows the user to use same
+# blueprint several times, with different paramters for
+# each time.
+###########################################################
+
+inputs:
+
+  host_ip:
+      description: >
+        The ip of the host the application will be deployed on
+      default: 192.168.33.11
+
+node_templates:
+
+  master:
+    type: cloudify.kubernetes.Master
+    properties:
+      ip: 192.168.33.10
+      ssh_username: vagrant
+      ssh_keyfilename: /vagrant/insecure_private_key
+      install: False  #just connect
+    relationships:
+      - type: cloudify.relationships.depends_on 
+        target: joiner
+
+  nodecellar:
+    type: cloudify.kubernetes.Microservice
+    properties:
+#      config:
+#        apiVersion: v1
+#        kind: Pod
+#        metadata:
+#          name: nodecellar
+#        spec:
+#          restartPolicy: Never
+#          containers:
+#          - name: nodecellar
+#            image: dfilppi/nodecellar:v1
+#            workingDir: /root/nodecellar-master
+#            command: ["../node/bin/node","server.js"]
+#            ports:
+#            - containerPort: 3000
+#              hostPort: 3000
+#            hostIP: { get_property: [ master, ip]}
+#            env:
+#            - name: MONGO_HOST
+#              value: { get_input: host_ip }
+#            - name: MONGO_PORT
+#              value: { concat: ["", { get_property: [ mongod1 , port ]}] }
+      config_path: service.yaml
+      config_overrides:
+        - { concat: ["['spec']['containers'][0]['ports'][0]['hostIP']=","'",{ get_property: [ master, ip]},"'"] }
+        - { concat: ["['spec']['containers'][0]['env'][0]['value']=","'",{ get_input: host_ip},"'"] }
+        - { concat: ["['spec']['containers'][0]['env'][1]['value']=","'",{ get_property: [ mongod1, port]},"'"] }
+    relationships:
+      - type: cloudify.kubernetes.relationships.connected_to_master
+        target: master
+
+
+  ###########################################################
+  # We define a type that inherits cloudify's default
+  # compute node, and adds monitoring capabillities
+  # on top of it.
+  ###########################################################
+
+  host:
+    type: cloudify.nodes.Compute
+    properties:
+      ip: { get_input: host_ip }
+      install_agent: false
+
+  # This node will wait for all others to start so it can
+  # publish outputs for other blueprints
+  joiner:
+    type: cloudify.nodes.Root
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start: scripts/mongo/set-joiner-outputs.py
+    relationships:
+      - type: joiner_connected_to_mongod
+        target: mongod1
+      - type: cloudify.relationships.contained_in
+        target: host
+
+  # MONGOD - for singlenode, explicitly run 2, for cloud
+  # can use instances
+  mongod1:
+    type: nodecellar.nodes.Mongod
+    instances:
+      deploy: 1
+    properties:
+      port: 27400
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: host
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure: scripts/mongo/install-pymongo.sh
+
