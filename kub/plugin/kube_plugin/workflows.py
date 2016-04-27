@@ -28,6 +28,8 @@ def kube_scale(**kwargs):
   else:
     amount=int(kwargs['amount'])
 
+  with open("/tmp/log","a") as f:
+    f.write("running: ./kubectl -s http://localhost:8080 scale --replicas={} rc {}".format(amount,name))
   run("./kubectl -s http://localhost:8080 scale --replicas={} rc {}".format(amount,name))
 
 #
@@ -43,6 +45,8 @@ def kube_create(**kwargs):
     run("wget -O /tmp/manifest.yaml "+url)
   else:
     #in blueprint dir
+    with open("/tmp/log","a") as f:
+      f.write("getting manifest\n")
 
     res=manager.download_blueprint_resource(ctx.blueprint.id,url,ctx.logger)
     
@@ -91,6 +95,8 @@ def kube_delete(**kwargs):
   optstr=buildopts(kwargs,{},{},["all"],['name','master','resource'])
   runstr="./kubectl -s http://localhost:8080 delete {} {} {}".format(kwargs['resource'],kwargs['name'],optstr)
   ctx.logger.info("Running: {}".format(runstr))
+  with open("/tmp/log","a") as f:
+    f.write("executing {}\n".format(runstr))
   run(runstr)
 
 ##################################################
@@ -167,6 +173,8 @@ def get_ip(master):
     instance=node.instances.next()._node_instance
     if(node.type=='cloudify.nodes.DeploymentProxy'):
       r=re.match('.*://(.*):(.*)',instance.runtime_properties['kubernetes_info']['url'])
+      with open("/tmp/log","a") as f:
+        f.write("instance runtime properties:"+str(instance.runtime_properties))
         f.write("  ip="+r.group(1))
       return(r.group(1))
     else:

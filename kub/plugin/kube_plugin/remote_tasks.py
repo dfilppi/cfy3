@@ -18,7 +18,9 @@
 #
 from cloudify.decorators import operation
 from cloudify import ctx,manager,utils
+from fabric.api import env, put, run, sudo
 import os
+import sys
 import re
 import time
 import subprocess
@@ -43,12 +45,23 @@ def connect_master(**kwargs):
     ctx.source.instance.runtime_properties['ssh_keyfilename']=ctx.target.node.properties['ssh_keyfilename']
   elif(ctx.target.node._node.type=='cloudify.nodes.DeploymentProxy'):
     ctx.logger.info("connecting to dproxy")
-    ctx.logger.info("got dproxy url:"+ctx.target.instance.runtime_properties['kubernetes_info']['url'])
-    ctx.source.instance.runtime_properties['master_ip']=ctx.target.instance.runtime_properties['kubernetes_info']['url'].split(':')[0]
-    ctx.source.instance.runtime_properties['master_port']=ctx.target.instance.runtime_properties['kubernetes_info']['url'].split(':')[1]
+    ctx.logger.info("got *dproxy url:"+ctx.target.instance.runtime_properties['kubernetes_info']['url'])
+
+    try:
+
+      r=re.match('http://(.*):(.*)',ctx.target.instance.runtime_properties['kubernetes_info']['url'])
+
+      ctx.logger.info("GROUPS:{}".format(r.groups()))
+
+      ctx.source.instance.runtime_properties['master_ip']=r.group(1)
+      ctx.source.instance.runtime_properties['master_port']=r.group(2)
+    except:
+      print "Unexpected error:", sys.exc_info()[0]
+      raise
+
   else:
     raise(NonRecoverableError('unsupported relationship'))
-
+    
 # called to connect to a deployment proxy.  generalization of connect_master
 @operation
 def connect_proxy(**kwargs):
@@ -129,6 +142,31 @@ def process_subs(s):
   return s
 
 #
+# delete existing item
+# Note ONLY FUNCTIONS FOR FILE BASED CONFIG
+#
+@operation
+def kube_delete(**kwargs):
+  env['host_string']=ctx.instance.runtime_properties['master_ip']
+  env['user']=ctx.node.properties['ssh_username']
+  env['key_filename']=ctx.node.properties['ssh_keyfilename']
+
+  if "kinds" in ctx.instance.runtime_properties:
+    for kind in ctx.instance.runtime_properties['kinds'].split(","):
+      kind=kind.split(':')
+      cmd="./kubectl delete {} {}".format(kind[0],kind[1])
+      output=run(cmd)
+      if(output.return_code):
+        raise(NonRecoverableError('kubectl delete failed:{}'.format(output.stderr)))
+  
+      
+  #cmd="./kubectl delete {}s {}".format(ctx.instance.runtime_properties['kind'],ctx.node.properties['name'])
+  
+  #output=run(cmd)
+  #if(output.return_code):
+  #  raise(NonRecoverableError('kubectl delete failed:{}'.format(output.stderr)))
+
+#
 # Use kubectl to run and expose a service
 #
 @operation
@@ -136,26 +174,29 @@ def kube_run_expose(**kwargs):
   ctx.logger.info("in kube_run_expose")
   config=ctx.node.properties['config']
   config_files=ctx.node.properties['config_files']
+  env['host_string']=ctx.instance.runtime_properties['master_ip']
+  env['user']=ctx.node.properties['ssh_username']
+  env['key_filename']=ctx.node.properties['ssh_keyfilename']
+
+  ctx.logger.info("fabric settings.  host_string={}  user={} key_filename={}".format(ctx.instance.runtime_properties['master_ip'],ctx.node.properties['ssh_username'],ctx.node.properties['ssh_keyfilename']))
 
   def write_and_run(d):
-    os.chdir(os.path.expanduser("~"))
-    fname="/tmp/kub_{}.yaml".format(ctx.instance.id)
+    fname="/tmp/kub_{}_{}.yaml".format(ctx.instance.id,time.time())
     with open(fname,'w') as f:
       yaml.safe_dump(d,f)
+    put(fname,fname)
     cmd="./kubectl -s http://localhost:8080 create -f "+fname + " >> /tmp/kubectl.out 2>&1"
     ctx.logger.info("running create: {}".format(cmd))
 
-    #retry a few times
-    retry=0
-    while subprocess.call(cmd,shell=True):
-      if retry>3:
-        raise Exception("couldn't connect to server on 8080")
-      retry=retry+1
-      ctx.logger.info("run failed retrying")
-      time.sleep(2)
+    output=run(cmd)
+    if(output.return_code):
+      raise(NonRecoverableError('kubectl create failed:{}'.format(output.stderr)))
 
+  #embedded config
   if(config):
     write_and_run(config)
+
+  #file config
   elif(len(config_files)):
     for file in config_files:
       if (not ctx._local):
@@ -164,6 +205,15 @@ def kube_run_expose(**kwargs):
         local_path=file['file']
       with open(local_path) as f:
         base=yaml.load(f)
+
+        #store kinds for uninstall
+        kinds=""
+        if 'kinds' in ctx.instance.runtime_properties:
+          kinds=ctx.instance.runtime_properties['kinds']+","+base['kind']+":"+base['metadata']['name']
+        else:
+          kinds=base['kind']+":"+base['metadata']['name']
+        ctx.instance.runtime_properties['kinds']=kinds
+
       if('overrides' in file):
         for o in file['overrides']:
           ctx.logger.info("exeing o={}".format(o))
@@ -171,17 +221,23 @@ def kube_run_expose(**kwargs):
           o=process_subs(o)
           exec "base"+o in globals(),locals()
       write_and_run(base)
+
+  #built-in config
   else:
     # do kubectl run
     cmd='./kubectl -s http://localhost:8080 run {} --image={} --port={} --replicas={}'.format(ctx.node.properties['name'],ctx.node.properties['image'],ctx.node.properties['target_port'],ctx.node.properties['replicas'])
     if(ctx.node.properties['run_overrides']):
       cmd=cmd+" --overrides={}".format(ctx.node.properties['run_overrides'])
 
-    subprocess.call(cmd,True)
+    output=run(cmd)
+    if(output.return_code):
+      raise(NonRecoverableError('kubectl run failed:{}'.format(output.stderr)))
 
     # do kubectl expose
     cmd='./kubectl -s http://localhost:8080 expose rc {} --port={} --protocol={}'.format(ctx.node.properties['name'],ctx.node.properties['port'],ctx.node.properties['protocol'])
     if(ctx.node.properties['expose_overrides']):
       cmd=cmd+" --overrides={}".format(ctx.node.properties['expose_overrides'])
 
-    subprocess.call(cmd,shell=True)
+    output=call(cmd)
+    if(output.return_code):
+      raise(NonRecoverableError('kubectl expose failed:{}'.format(output.stderr)))

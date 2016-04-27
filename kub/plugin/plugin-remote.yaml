@@ -1,6 +1,6 @@
 plugins:
   kubernetes:
-    executor: host_agent
+    executor: central_deployment_agent
     source: kubernetes
 
 node_types:
@@ -88,9 +88,8 @@ node_types:
     interfaces:
       cloudify.interfaces.lifecycle:
         start:
-          implementation: kubernetes.kube_plugin.tasks.kube_run_expose
+          implementation: kubernetes.kube_plugin.remote_tasks.kube_run_expose
         stop:
-          #no non-remote implementation yet
           implementation: kubernetes.kube_plugin.remote_tasks.kube_delete
 
 
@@ -100,7 +99,7 @@ relationships:
     source_interfaces:
       cloudify.interfaces.relationship_lifecycle:
         postconfigure:
-          implementation: kubernetes.kube_plugin.tasks.connect_master
+          implementation: kubernetes.kube_plugin.remote_tasks.connect_master
 
   cloudify.kubernetes.relationships.contained_in_host:
     derived_from: cloudify.relationships.contained_in
